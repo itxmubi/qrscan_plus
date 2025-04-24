@@ -62,7 +62,7 @@ String cameraScanResult = await scanner.scan();
 
 ## Select Bar-Code or QR-Code photos for analysis and Generating QR-Code 
 ```dart
-import 'package:qrscan/qrscan.dart' as scanner;
+import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
 
 // Select Bar-Code or QR-Code photos for analysis
 String photoScanResult = await scanner.scanPhoto();
