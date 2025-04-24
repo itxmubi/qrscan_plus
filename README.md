@@ -7,10 +7,10 @@ Language: [English](README.md)
 
 A Flutter plugin 🛠 to scanning. Ready for Android 🚀
 
-This project is a **fork** of the original [qrscan](https://github.com/leyan95/qrcode_scanner) plugin, which I have **updated to be compatible with the latest Flutter and Android versions**. Thanks to the original author for their amazing work!
+This project is a **fork** of the original [qrscan](https://github.com/itxmubi/qrscan_plus) plugin, which I have **updated to be compatible with the latest Flutter and Android versions**. Thanks to the original author for their amazing work!
 
 
-[github](https://github.com/leyan95/qrcode_scanner)
+[github](https://github.com/itxmubi/qrscan_plus)
 
 ## Permission：
 ```xml
@@ -68,7 +68,7 @@ import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
 String photoScanResult = await scanner.scanPhoto();
 
 // Generating QR-Code
-Uint8List result = await scanner.generateBarCode('https://github.com/leyan95/qrcode_scanner');
+Uint8List result = await scanner.generateBarCode('https://github.com/itxmubi/qrscan_plus');
 
 // Scanning the image of the specified path
 String barcode = await scanner.scanPath(path);
