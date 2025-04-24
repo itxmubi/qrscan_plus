@@ -1,4 +1,4 @@
-Language: [English](README.md) | [中文简体](README-ZH.md)
+Language: [English](README.md) 
 
 # QR Code Scanner
   
@@ -6,6 +6,9 @@ Language: [English](README.md) | [中文简体](README-ZH.md)
 [![Pub](https://img.shields.io/pub/v/qrscan.svg?style=flat-square)](https://pub.dartlang.org/packages/qrscan)
 
 A Flutter plugin 🛠 to scanning. Ready for Android 🚀
+
+This project is a **fork** of the original [qrscan](https://github.com/leyan95/qrcode_scanner) plugin, which I have **updated to be compatible with the latest Flutter and Android versions**. Thanks to the original author for their amazing work!
+
 
 [github](https://github.com/leyan95/qrcode_scanner)
 
@@ -22,12 +25,12 @@ Add this to your package's pubspec.yaml file:
 
 ```yaml
 dependencies:
- qrscan: ^0.3.3
+ qrscan_plus: any
 ```
 
 ## Scan Usage example
 ```dart
-import 'package:qrscan/qrscan.dart' as scanner;
+import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
 
 String cameraScanResult = await scanner.scan();
 ```

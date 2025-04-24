@@ -1,13 +1,13 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:qrscan/qrscan.dart' as scanner;
+import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
 
 void main() {
   runApp(MyApp());
@@ -20,8 +20,8 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   Uint8List bytes = Uint8List(0);
-  TextEditingController _inputController;
-  TextEditingController _outputController;
+  TextEditingController? _inputController;
+  TextEditingController? _outputController;
 
   @override
   initState() {
@@ -157,13 +157,15 @@ class _MyAppState extends State<MyApp> {
                           child: GestureDetector(
                             onTap: () async {
                               final success =
-                                  await ImageGallerySaver.saveImage(this.bytes);
+                                  await ImageGallerySaverPlus.saveImage(
+                                      this.bytes);
                               SnackBar snackBar;
                               if (success) {
                                 snackBar = new SnackBar(
                                     content:
                                         new Text('Successful Preservation!'));
-                                Scaffold.of(context).showSnackBar(snackBar);
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(snackBar);
                               } else {
                                 snackBar = new SnackBar(
                                     content: new Text('Save failed!'));
@@ -210,7 +212,7 @@ class _MyAppState extends State<MyApp> {
           child: SizedBox(
             height: 120,
             child: InkWell(
-              onTap: () => _generateBarCode(this._inputController.text),
+              onTap: () => _generateBarCode(this._inputController!.text),
               child: Card(
                 child: Column(
                   children: <Widget>[
@@ -275,34 +277,33 @@ class _MyAppState extends State<MyApp> {
   Future _scan() async {
     await Permission.camera.request();
     String barcode = await scanner.scan();
-    if (barcode == null) {
-      print('nothing return.');
-    } else {
-      this._outputController.text = barcode;
-    }
+
+    log(barcode);
+    this._outputController!.text = barcode;
   }
 
   Future _scanPhoto() async {
     await Permission.storage.request();
     String barcode = await scanner.scanPhoto();
-    this._outputController.text = barcode;
+    this._outputController!.text = barcode;
   }
 
-  Future _scanPath(String path) async {
-    await Permission.storage.request();
-    String barcode = await scanner.scanPath(path);
-    this._outputController.text = barcode;
-  }
+  // Future _scanPath(String path) async {
+  //   await Permission.storage.request();
+  //   String barcode = await scanner.scanPath(path);
+  //   this._outputController!.text = barcode;
+  // }
 
   Future _scanBytes() async {
-    File file = await ImagePicker().getImage(source: ImageSource.camera).then((picked) {
-      if (picked == null) return null;
-      return File(picked.path);
+    File file = await ImagePicker()
+        .pickImage(source: ImageSource.camera)
+        .then((picked) {
+      if (picked != null) return File(picked.path);
+      return File(picked!.path);
     });
-    if (file == null) return;
     Uint8List bytes = file.readAsBytesSync();
     String barcode = await scanner.scanBytes(bytes);
-    this._outputController.text = barcode;
+    this._outputController!.text = barcode;
   }
 
   Future _generateBarCode(String inputCode) async {

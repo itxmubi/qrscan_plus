@@ -1,11 +1,14 @@
-name: qrscan
+name: qrscan_plus
 description: A Plug-in for dart, which help you scanning barcode and qrcode with android device.
-version: 0.3.3
-homepage: https://github.com/leyan95/qrcode_scanner
+version: 1.0.0
+homepage: https://github.com/itxmubi/qrscan_plus
+repository: https://github.com/itxmubi/qrscan_plus
+issue_tracker: https://github.com/itxmubi/qrscan_plus/issues
+documentation: https://github.com/itxmubi/qrscan_plus#readme
 
 environment:
-  sdk: ">=2.12.0 <3.0.0"
-  flutter: ">=1.12.13+hotfix.5"
+  sdk: '>=3.2.3 <4.0.0'
+ 
 
 dependencies:
   flutter:
@@ -13,7 +16,7 @@ dependencies:
 
 dev_dependencies:
   test: ^1.14.2
-  test_coverage: ^0.4.1
+ 
 
 flutter:
   plugin:
