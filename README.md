@@ -10,7 +10,21 @@ A Flutter plugin 🛠 to scanning. Ready for Android 🚀
 This project is a **fork** of the original [qrscan](https://github.com/itxmubi/qrscan_plus) plugin, which I have **updated to be compatible with the latest Flutter and Android versions**. Thanks to the original author for their amazing work!
 
 
-[github](https://github.com/itxmubi/qrscan_plus)
+## 📢 Note for Android Developers
+
+To use this plugin, you **must** add the following Maven repository in your project’s `android/build.gradle` (or `build.gradle.kts`):
+
+```gradle
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' } // 👈 Add this line
+    }
+}```
+
+
+[Qrscan Plus](https://github.com/itxmubi/qrscan_plus)
 
 ## Permission：
 ```xml
