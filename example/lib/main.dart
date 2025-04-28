@@ -160,7 +160,7 @@ class _MyAppState extends State<MyApp> {
                                   await ImageGallerySaverPlus.saveImage(
                                       this.bytes);
                               SnackBar snackBar;
-                              if (success) {
+                              if (success['isSuccess']) {
                                 snackBar = new SnackBar(
                                     content:
                                         new Text('Successful Preservation!'));
@@ -275,17 +275,23 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future _scan() async {
-    await Permission.camera.request();
-    String barcode = await scanner.scan();
+    try {
+      String barcode = await scanner.scan();
 
-    log(barcode);
-    this._outputController!.text = barcode;
+      log(barcode);
+      this._outputController!.text = barcode;
+      // }
+    } catch (e) {
+      log(e.toString());
+    }
   }
 
   Future _scanPhoto() async {
-    await Permission.storage.request();
-    String barcode = await scanner.scanPhoto();
-    this._outputController!.text = barcode;
+    final status = await Permission.storage.request();
+    if (status.isGranted) {
+      String barcode = await scanner.scanPhoto();
+      this._outputController!.text = barcode;
+    }
   }
 
   // Future _scanPath(String path) async {

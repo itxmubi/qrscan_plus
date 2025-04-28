@@ -1,3 +1,5 @@
+## [1.0.4] Added IOS Support
+## [1.0.3]
 ## [1.0.2]
 - Update Gradle Files
 ## [1.0.1]

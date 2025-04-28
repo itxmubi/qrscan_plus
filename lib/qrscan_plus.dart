@@ -26,7 +26,7 @@ Future<String> scanBytes(Uint8List uint8list) async {
   return await _channel.invokeMethod('scan_bytes', {'bytes': uint8list});
 }
 
-/// Generating Bar Code Uint8List
+/// Generat§ing Bar Code Uint8List
 Future<Uint8List> generateBarCode(String code) async {
   assert(code.isNotEmpty);
   return await _channel.invokeMethod('generate_barcode', {'code': code});

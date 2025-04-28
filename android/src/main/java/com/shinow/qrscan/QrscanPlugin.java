@@ -37,16 +37,16 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
     private final int REQUEST_CODE = 100;
     private final int REQUEST_IMAGE = 101;
 
-    // @Deprecated
-    // public static void registerWith(Registrar registrar) {
-    //     QrscanPlugin plugin = new QrscanPlugin();
-    //     plugin.activity = registrar.activity();
-    //     plugin.channel = new MethodChannel(registrar.messenger(), "qr_scan");
-    //     plugin.channel.setMethodCallHandler(plugin);
-    //     registrar.addActivityResultListener(plugin);
+    @Deprecated
+    public static void registerWith(Registrar registrar) {
+        QrscanPlugin plugin = new QrscanPlugin();
+        plugin.activity = registrar.activity();
+        plugin.channel = new MethodChannel(registrar.messenger(), "qr_scan");
+        plugin.channel.setMethodCallHandler(plugin);
+        registrar.addActivityResultListener(plugin);
 
-    //     ZXingLibrary.initDisplayOpinion(registrar.activity());
-    // }
+        ZXingLibrary.initDisplayOpinion(registrar.activity());
+    }
 
     private MethodChannel channel;
 

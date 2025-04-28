@@ -5,7 +5,7 @@ Language: [English](README.md)
 [![License][license-image]][license-url] 
 [![Pub](https://img.shields.io/pub/v/qrscan.svg?style=flat-square)](https://pub.dartlang.org/packages/qrscan)
 
-A Flutter plugin 🛠 to scanning. Ready for Android 🚀
+A Flutter plugin 🛠 to scanning. Ready for Android & IOS🚀
 
 This project is a **fork** of the original [qrscan](https://github.com/itxmubi/qrscan_plus) plugin, which I have **updated to be compatible with the latest Flutter and Android versions**. Thanks to the original author for their amazing work!
 
@@ -21,12 +21,14 @@ allprojects {
         mavenCentral()
         maven { url 'https://jitpack.io' } // 👈 Add this line
     }
-}```
+}
+```
 
 
 [Qrscan Plus](https://github.com/itxmubi/qrscan_plus)
 
 ## Permission：
+
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
 <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
