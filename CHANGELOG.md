@@ -1,5 +1,7 @@
+## [1.0.4+2] 
+
 ## [1.0.4+1] 
-Added IOS Support
+
 ## [1.0.4] 
 Added IOS Support
 ## [1.0.3]
