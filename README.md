@@ -9,6 +9,12 @@ A Flutter plugin 🛠 to scanning. Ready for Android & IOS🚀
 
 This project is a **fork** of the original [qrscan](https://github.com/itxmubi/qrscan_plus) plugin, which I have **updated to be compatible with the latest Flutter and Android versions**. Thanks to the original author for their amazing work!
 
+Reporting Issues
+If you encounter any issues or have suggestions for improvements, please report them by opening a new issue on GitHub:
+
+🔗 https://github.com/itxmubi/qrscan_plus/issues
+
+Your feedback helps make this project better!
 
 ## 📢 Note for Android Developers
 
@@ -67,11 +73,6 @@ String cameraScanResult = await scanner.scan();
 
 -  Generate BR-CODE
 
-## TODO
-
--  [] Support IOS (example builds, but invoking scanner does not return)
--  [] Provide iOS setup documentation, if necessary
-
 ## Demo App
 
 ![qrscan.gif](https://github.com/wechat-program/album/blob/master/pic/cons/qr_scan_demo.gif)
@@ -105,7 +106,9 @@ Distributed under the MIT license. See ``LICENSE`` for more information.
 
 ## About
 
-Created by Shusheng.
+Real Thanks to Shusheng.
+
+Updated and Mainted By [Mubashir Nawaz](https://github.com/itxmubi) 
 
 [license-image]: https://img.shields.io/badge/License-MIT-blue.svg
 [license-url]: LICENSE
