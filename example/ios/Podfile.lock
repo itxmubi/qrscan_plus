@@ -6,7 +6,7 @@ PODS:
     - Flutter
   - permission_handler_apple (9.3.0):
     - Flutter
-  - qrscan_plus (0.0.1):
+  - qrscan_plus (1.0.7):
     - Flutter
 
 DEPENDENCIES:
@@ -29,12 +29,12 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/qrscan_plus/ios"
 
 SPEC CHECKSUMS:
-  Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   image_gallery_saver_plus: 782ade975fe6a4600b53e7c1983e3a2979d1e9e5
-  image_picker_ios: c560581cceedb403a6ff17f2f816d7fea1421fc1
+  image_picker_ios: 4f2f91b01abdb52842a8e277617df877e40f905b
   permission_handler_apple: 9878588469a2b0d0fc1e048d9f43605f92e6cec2
-  qrscan_plus: 53a5cb80db6a805165d24065a2cba86ec1c02a81
+  qrscan_plus: 0236fee14dfc714d23edacfce71e20b35761c2eb
 
-PODFILE CHECKSUM: 49875b5a5d0d2d7f7cf38a527f1ba7b98210e02f
+PODFILE CHECKSUM: a6c8ad58f957ca28ef247cc5f9e46cc293dd1acb
 
 COCOAPODS: 1.16.2

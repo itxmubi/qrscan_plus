@@ -7,7 +7,6 @@ import AudioToolbox
 
 public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutputObjectsDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     private var result: FlutterResult?
-    private var viewController: UIViewController?
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var scanWindowView: UIView?
@@ -16,7 +15,6 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "qr_scan", binaryMessenger: registrar.messenger())
         let instance = SwiftQrscanPlugin()
-        instance.viewController = UIApplication.shared.delegate?.window??.rootViewController
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
@@ -26,6 +24,10 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
         switch call.method {
         case "generate_barcode":
             generateBarcode(call)
+        case "scan_bytes":
+            scanBytes(call)
+        case "scan_path":
+            scanPath(call)
         case "scan_photo":
             checkPhotoPermission()
         case "scan":
@@ -78,11 +80,11 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
     private func checkPhotoPermission() {
         let status = PHPhotoLibrary.authorizationStatus()
         switch status {
-        case .authorized:
+        case .authorized, .limited:
             openPhotoLibrary()
         case .notDetermined:
             PHPhotoLibrary.requestAuthorization { [weak self] status in
-                if status == .authorized {
+                if status == .authorized || status == .limited {
                     DispatchQueue.main.async {
                         self?.openPhotoLibrary()
                     }
@@ -96,10 +98,53 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
     }
     
     private func openPhotoLibrary() {
+        guard let topViewController = currentViewController() else {
+            result?(FlutterError(code: "UNAVAILABLE", message: "View controller unavailable", details: nil))
+            return
+        }
+
         let picker = UIImagePickerController()
         picker.delegate = self
         picker.sourceType = .photoLibrary
-        viewController?.present(picker, animated: true)
+        topViewController.present(picker, animated: true)
+    }
+
+    private func scanBytes(_ call: FlutterMethodCall) {
+        let arguments = call.arguments as? [String: Any] ?? [:]
+        guard let typedData = arguments["bytes"] as? FlutterStandardTypedData else {
+            result?(FlutterError(code: "INVALID_ARGUMENT", message: "Missing 'bytes'", details: nil))
+            return
+        }
+
+        guard let image = UIImage(data: typedData.data),
+              let ciImage = CIImage(image: image) else {
+            result?(FlutterError(code: "INVALID_IMAGE", message: "Failed to decode image bytes", details: nil))
+            return
+        }
+
+        detectBarcode(ciImage)
+    }
+
+    private func scanPath(_ call: FlutterMethodCall) {
+        let arguments = call.arguments as? [String: Any] ?? [:]
+        guard let path = arguments["path"] as? String, !path.isEmpty else {
+            result?(FlutterError(code: "INVALID_ARGUMENT", message: "Missing 'path'", details: nil))
+            return
+        }
+
+        let fileURL: URL
+        if path.hasPrefix("file://"), let url = URL(string: path) {
+            fileURL = url
+        } else {
+            fileURL = URL(fileURLWithPath: path)
+        }
+
+        guard let ciImage = CIImage(contentsOf: fileURL) else {
+            result?(FlutterError(code: "INVALID_IMAGE", message: "Failed to load image from path", details: nil))
+            return
+        }
+
+        detectBarcode(ciImage)
     }
     
     // MARK: - Camera Scanning
@@ -129,7 +174,7 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
     }
     
     private func setupCameraScan() {
-        guard let viewController = viewController else {
+        guard let viewController = currentViewController() else {
             result?(FlutterError(code: "UNAVAILABLE", 
                               message: "View controller unavailable", 
                               details: nil))
@@ -209,6 +254,27 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
             self.scanWindowView = nil
         }
     }
+
+    private func currentViewController() -> UIViewController? {
+        let activeScene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+
+        let keyWindow = activeScene?.windows.first(where: { $0.isKeyWindow })
+        var top = keyWindow?.rootViewController
+
+        while let presented = top?.presentedViewController {
+            top = presented
+        }
+
+        if let nav = top as? UINavigationController {
+            return nav.visibleViewController ?? nav
+        }
+        if let tab = top as? UITabBarController {
+            return tab.selectedViewController ?? tab
+        }
+        return top
+    }
     
     // MARK: - AVCaptureMetadataOutputObjectsDelegate
     public func metadataOutput(_ output: AVCaptureMetadataOutput, 
@@ -240,7 +306,7 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
             return
         }
         
-        detectQRCode(ciImage)
+        detectBarcode(ciImage)
     }
     
     public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
@@ -249,7 +315,7 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
     }
     
     // MARK: - QR Code Detection
-    private func detectQRCode(_ image: CIImage) {
+    private func detectBarcode(_ image: CIImage) {
         let request = VNDetectBarcodesRequest { [weak self] request, error in
             guard let self = self else { return }
             
@@ -269,6 +335,10 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
         }
         
         let handler = VNImageRequestHandler(ciImage: image)
-        try? handler.perform([request])
+        do {
+            try handler.perform([request])
+        } catch {
+            self.result?(FlutterError(code: "DETECTION_ERROR", message: error.localizedDescription, details: nil))
+        }
     }
 }

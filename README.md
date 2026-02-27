@@ -9,11 +9,10 @@ A Flutter plugin for scanning QR/barcodes and generating QR code images.
 | `scan()` (camera) | ✅ | ✅ |
 | `scanPhoto()` (gallery image) | ✅ | ✅ |
 | `generateBarCode()` | ✅ | ✅ |
-| `scanPath(path)` | ✅ | ❌ |
-| `scanBytes(uint8list)` | ✅ | ❌ |
+| `scanPath(path)` | ✅ | ✅ |
+| `scanBytes(uint8list)` | ✅ | ✅ |
 
 Notes:
-- On iOS, `scanPath` and `scanBytes` are not implemented.
 - `generateBarCode` generates a QR image (PNG bytes on iOS, image bytes on Android).
 
 ## Installation
@@ -64,7 +63,7 @@ Future<void> runQrscan() async {
 }
 ```
 
-Android-only methods:
+Extra methods:
 
 ```dart
 final byPath = await scanner.scanPath('/storage/emulated/0/Download/test.png');

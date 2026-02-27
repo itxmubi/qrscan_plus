@@ -1,3 +1,8 @@
+## [1.0.7+1]
+- Added iOS implementations for `scan_bytes` and `scan_path` to match method-channel API coverage and prevent `MissingPluginException`.
+- Updated iOS barcode detection flow to share a common detection path with improved error propagation.
+- Updated README feature matrix to reflect iOS support for `scanBytes` and `scanPath`.
+
 ## [1.0.7]
 - Removed JitPack-only dependency path from Android implementation.
 - Migrated Android scanner implementation to Maven Central ZXing dependencies (`com.journeyapps:zxing-android-embedded` + `com.google.zxing:core`).
