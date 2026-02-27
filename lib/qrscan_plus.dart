@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 /// camera access denied const.
+// ignore: constant_identifier_names
 const CameraAccessDenied = 'PERMISSION_NOT_GRANTED';
 
 /// method channel.

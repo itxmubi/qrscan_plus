@@ -13,7 +13,10 @@ import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.uuzuche.lib_zxing.activity.CaptureFragment;
@@ -22,13 +25,20 @@ import com.uuzuche.lib_zxing.activity.CodeUtils;
 public class SecondActivity extends AppCompatActivity {
 
     public static boolean isLightOpen = false;
-    private final int REQUEST_IMAGE = 101;
     private LinearLayout lightLayout;
     private LinearLayout backLayout;
     private LinearLayout photoLayout;
     private SensorManager sensorManager;
     private Sensor lightSensor;
     private SensorEventListener sensorEventListener;
+    private final ActivityResultLauncher<Intent> pickImageLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::handlePickImageResult);
+    private final OnBackPressedCallback onBackPressedCallback = new OnBackPressedCallback(true) {
+        @Override
+        public void handleOnBackPressed() {
+            finishWithFailedResult();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +56,7 @@ public class SecondActivity extends AppCompatActivity {
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
         sensorEventListener = new LightSensorEventListener(lightLayout);
+        getOnBackPressedDispatcher().addCallback(this, onBackPressedCallback);
 
         initView();
     }
@@ -99,31 +110,26 @@ public class SecondActivity extends AppCompatActivity {
                 Intent intent = new Intent();
                 intent.setAction(Intent.ACTION_PICK);
                 intent.setType("image/*");
-                SecondActivity.this.startActivityForResult(intent, REQUEST_IMAGE);
+                pickImageLauncher.launch(intent);
             }
         });
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_IMAGE) {
-            if (data != null) {
-                Uri uri = data.getData();
-                String path = ImageUtil.getImageAbsolutePath(SecondActivity.this, uri);
-                Intent intent = new Intent();
-                intent.setClass(SecondActivity.this, QrscanPlugin.class);
-                Bundle bundle = new Bundle();
-                bundle.putString("path", path);
-                intent.putExtra("secondBundle", bundle);
-                setResult(Activity.RESULT_OK, intent);
-                SecondActivity.this.finish();
-            }
+    private void handlePickImageResult(ActivityResult activityResult) {
+        if (activityResult.getResultCode() == Activity.RESULT_OK && activityResult.getData() != null) {
+            Uri uri = activityResult.getData().getData();
+            String path = ImageUtil.getImageAbsolutePath(SecondActivity.this, uri);
+            Intent intent = new Intent();
+            Bundle bundle = new Bundle();
+            bundle.putString("path", path);
+            bundle.putString("uri", uri != null ? uri.toString() : null);
+            intent.putExtra("secondBundle", bundle);
+            setResult(Activity.RESULT_OK, intent);
+            SecondActivity.this.finish();
         }
     }
 
-    @Override
-    public void onBackPressed() {
+    private void finishWithFailedResult() {
         Intent resultIntent = new Intent();
         Bundle bundle = new Bundle();
         bundle.putInt(CodeUtils.RESULT_TYPE, CodeUtils.RESULT_FAILED);

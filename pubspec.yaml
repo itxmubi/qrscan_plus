@@ -1,6 +1,6 @@
 name: qrscan_plus
 description: A Plug-in for dart, which help you scanning and Generating barcode and qrcode with Android and IOS Device.
-version: 1.0.4+2
+version: 1.0.6
 homepage: https://github.com/itxmubi/qrscan_plus
 repository: https://github.com/itxmubi/qrscan_plus
 issue_tracker: https://github.com/itxmubi/qrscan_plus/issues
@@ -16,6 +16,7 @@ dependencies:
 
 dev_dependencies:
   test: ^1.14.2
+  flutter_lints: ^6.0.0
 
 flutter:
   plugin:

@@ -3,19 +3,18 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'qrscan_plus'
-  s.version          = '0.0.1'
-  s.summary          = 'A new Flutter project.'
+  s.version          = '1.0.6'
+  s.summary          = 'QR/barcode scan and QR generation plugin for Flutter.'
   s.description      = <<-DESC
-A new Flutter project.
+Scan QR/barcode from camera or gallery and generate QR code images in Flutter.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/itxmubi/qrscan_plus'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'Mubashir Nawaz' => 'mubashir.nawaz40@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.public_header_files = 'Classes/**/*.h'
   s.dependency 'Flutter'
 
-  s.ios.deployment_target = '8.0'
+  s.ios.deployment_target = '12.0'
 end
-

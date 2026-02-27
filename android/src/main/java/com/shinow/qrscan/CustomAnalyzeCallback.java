@@ -1,17 +1,20 @@
 package com.shinow.qrscan;
 
 import android.graphics.Bitmap;
-import android.content.Intent;
 import io.flutter.plugin.common.MethodChannel.Result;
 import com.uuzuche.lib_zxing.activity.CodeUtils;
 
 public class CustomAnalyzeCallback implements CodeUtils.AnalyzeCallback {
-    private Result result;
-    private Intent intent;
+    private final Result result;
+    private final String errorCode;
 
-    public CustomAnalyzeCallback(Result result, Intent intent) {
+    public CustomAnalyzeCallback(Result result) {
+        this(result, "ANALYZE_FAILED");
+    }
+
+    public CustomAnalyzeCallback(Result result, String errorCode) {
         this.result = result;
-        this.intent = intent;
+        this.errorCode = errorCode;
     }
 
     @Override
@@ -21,7 +24,6 @@ public class CustomAnalyzeCallback implements CodeUtils.AnalyzeCallback {
 
     @Override
     public void onAnalyzeFailed() {
-        String errorCode = this.intent.getStringExtra("ERROR_CODE");
-        this.result.error(errorCode, null, null);
+        this.result.error(errorCode, "Failed to decode barcode/QR code from image.", null);
     }
 }

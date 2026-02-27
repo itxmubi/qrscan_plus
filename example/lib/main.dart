@@ -4,9 +4,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
 
 void main() {
@@ -286,11 +286,18 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  Future _scanPhoto() async {
-    final status = await Permission.storage.request();
-    if (status.isGranted) {
-      String barcode = await scanner.scanPhoto();
-      this._outputController!.text = barcode;
+  Future<void> _scanPhoto() async {
+    try {
+      final barcode = await scanner.scanPhoto();
+      this._outputController!.text =
+          barcode.isNotEmpty ? barcode : 'No barcode/QR code found.';
+    } on PlatformException catch (e) {
+      log('scanPhoto platform error: ${e.code} ${e.message}');
+      this._outputController!.text =
+          e.message ?? 'Failed to scan photo (${e.code}).';
+    } catch (e) {
+      log('scanPhoto error: $e');
+      this._outputController!.text = 'Failed to scan photo.';
     }
   }
 
@@ -312,8 +319,28 @@ class _MyAppState extends State<MyApp> {
     this._outputController!.text = barcode;
   }
 
-  Future _generateBarCode(String inputCode) async {
-    Uint8List result = await scanner.generateBarCode(inputCode);
-    this.setState(() => this.bytes = result);
+  Future<void> _generateBarCode(String inputCode) async {
+    final code = inputCode.trim();
+    if (code.isEmpty) {
+      this._outputController!.text = 'Please enter text to generate a barcode.';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Input cannot be empty.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final result = await scanner.generateBarCode(code);
+      this.setState(() => this.bytes = result);
+    } on PlatformException catch (e) {
+      log('generateBarCode platform error: ${e.code} ${e.message}');
+      this._outputController!.text =
+          e.message ?? 'Failed to generate barcode (${e.code}).';
+    } catch (e) {
+      log('generateBarCode error: $e');
+      this._outputController!.text = 'Failed to generate barcode.';
+    }
   }
 }

@@ -1,132 +1,121 @@
-Language: [English](README.md)
+# qrscan_plus
 
-# QR Code Scanner
+A Flutter plugin for scanning QR/barcodes and generating QR code images.
 
-[![License][license-image]][license-url]
-[![Pub](https://img.shields.io/pub/v/qrscan.svg?style=flat-square)](https://pub.dartlang.org/packages/qrscan)
+## Platform Support
 
-A Flutter plugin 🛠 to scanning. Ready for Android & IOS🚀
+| Feature | Android | iOS |
+|---|---|---|
+| `scan()` (camera) | ✅ | ✅ |
+| `scanPhoto()` (gallery image) | ✅ | ✅ |
+| `generateBarCode()` | ✅ | ✅ |
+| `scanPath(path)` | ✅ | ❌ |
+| `scanBytes(uint8list)` | ✅ | ❌ |
 
-This project is a **fork** of the original [qrscan](https://github.com/itxmubi/qrscan_plus) plugin, which I have **updated to be compatible with the latest Flutter and Android versions**. Thanks to the original author for their amazing work!
+Notes:
+- On iOS, `scanPath` and `scanBytes` are not implemented.
+- `generateBarCode` generates a QR image (PNG bytes on iOS, image bytes on Android).
 
-## Reporting Issues
+## Installation
 
-If you encounter any issues or have suggestions for improvements, please report them by opening a new issue on GitHub:
+```yaml
+dependencies:
+  qrscan_plus: ^1.0.6
+```
 
-🔗 https://github.com/itxmubi/qrscan_plus/issues
+## Android Setup
 
-Your feedback helps make this project better!
+### 1) Add JitPack repository
+This plugin depends on `android-zxingLibrary` from JitPack. Add JitPack in your Android repositories.
 
-## 📢 Note for Android Developers
+If you use `settings.gradle(.kts)` with `dependencyResolutionManagement`:
 
-To use this plugin, you **must** add the following Maven repository in your project’s `android/build.gradle` (or `build.gradle.kts`):
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven("https://jitpack.io")
+    }
+}
+```
+
+If your project still uses legacy `allprojects` repositories:
 
 ```gradle
 allprojects {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://jitpack.io' } // 👈 Add this line
+        maven { url 'https://jitpack.io' }
     }
 }
 ```
 
-[Qrscan Plus](https://github.com/itxmubi/qrscan_plus)
-
-## Permission：
+### 2) Permissions
+Add required permissions in your app manifest (`android/app/src/main/AndroidManifest.xml`):
 
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 ```
 
-## 📢 Note for iOS Developers
+Notes:
+- Gallery picking with `scanPhoto()` may work without manually requesting storage permission on modern Android.
+- If your app explicitly requests media/storage permissions at runtime, use Android-version-aware logic (Android 13+ media permissions differ from legacy storage permissions).
 
-> **Important:** You must add camera and photo library permissions to your iOS project to use this package.
+## iOS Setup
 
-In your `Info.plist`, add the following entries:
+Minimum iOS deployment target: `12.0`.
+
+Add usage descriptions in your app `Info.plist`:
 
 ```xml
 <key>NSCameraUsageDescription</key>
-<string>This app requires camera access to scan QR codes.</string>
+<string>This app needs camera access to scan QR/barcodes.</string>
 
 <key>NSPhotoLibraryUsageDescription</key>
-<string>This app requires photo library access to select images for scanning.</string>
+<string>This app needs photo library access to scan QR/barcodes from images.</string>
 ```
 
-## Installation
-
-Add this to your package's pubspec.yaml file:
-
-```yaml
-dependencies:
-  qrscan_plus: any
-```
-
-## Scan Usage example
+## Usage
 
 ```dart
 import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
 
-String cameraScanResult = await scanner.scan();
+Future<void> runQrscan() async {
+  final cameraResult = await scanner.scan();
+  final photoResult = await scanner.scanPhoto();
+  final qrBytes = await scanner.generateBarCode('https://github.com/itxmubi/qrscan_plus');
+}
 ```
 
-## Supported
-
-- [x] Scan BR-CODE
-- [x] Scan QR-CODE
-- [x] Control the flash while scanning
-- [x] Apply for camera privileges
-- [x] Scanning BR-CODE or QR-CODE in albums
-- [x] Parse to code string with uint8list
-- [x] Scanning the image of the specified path
-- [x] Display the switch button of the flashlight according to the light intensity
-- [x] Generate QR-CODE
-
-## Features
-
-- Generate BR-CODE
-
-<!-- ## Demo App
-
-![qrscan.gif](https://github.com/wechat-program/album/blob/master/pic/cons/qr_scan_demo.gif) -->
-
-## Select Bar-Code or QR-Code photos for analysis and Generating QR-Code
+Android-only methods:
 
 ```dart
-import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
-
-// Select Bar-Code or QR-Code photos for analysis
-String photoScanResult = await scanner.scanPhoto();
-
-// Generating QR-Code
-Uint8List result = await scanner.generateBarCode('https://github.com/itxmubi/qrscan_plus');
-
-// Scanning the image of the specified path
-String barcode = await scanner.scanPath(path);
-
-// Parse to code string with uint8list
-File file = await ImagePicker.pickImage(source: ImageSource.camera);
-Uint8List bytes = file.readAsBytesSync();
-String barcode = await scanner.scanBytes(uint8list);
+final byPath = await scanner.scanPath('/storage/emulated/0/Download/test.png');
+final byBytes = await scanner.scanBytes(uint8list);
 ```
 
-## Contribute
+## Error Handling Recommendation
 
-We would ❤️ to see your contribution!
+Handle platform exceptions around scan/generate calls:
+
+```dart
+try {
+  final result = await scanner.scanPhoto();
+  // use result
+} on PlatformException catch (e) {
+  // handle e.code / e.message
+}
+```
+
+## Repository and Issue Tracker
+
+- Repository: https://github.com/itxmubi/qrscan_plus
+- Issues: https://github.com/itxmubi/qrscan_plus/issues
 
 ## License
 
-Distributed under the MIT license. See `LICENSE` for more information.
-
-## About
-
-Real Thanks to Shusheng.
-
-Updated and Maintained By [Mubashir Nawaz](https://github.com/itxmubi)
-
-[license-image]: https://img.shields.io/badge/License-MIT-blue.svg
-[license-url]: LICENSE
-
-## Thanks
+MIT. See [LICENSE](LICENSE).

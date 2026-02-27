@@ -14,6 +14,8 @@ import com.uuzuche.lib_zxing.activity.CodeUtils;
 import com.uuzuche.lib_zxing.activity.ZXingLibrary;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
@@ -23,7 +25,6 @@ import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry;
-// import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 import static com.uuzuche.lib_zxing.activity.CodeUtils.RESULT_SUCCESS;
 import static com.uuzuche.lib_zxing.activity.CodeUtils.RESULT_TYPE;
@@ -36,17 +37,6 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
     private Activity activity;
     private final int REQUEST_CODE = 100;
     private final int REQUEST_IMAGE = 101;
-
-    @Deprecated
-    public static void registerWith(Registrar registrar) {
-        QrscanPlugin plugin = new QrscanPlugin();
-        plugin.activity = registrar.activity();
-        plugin.channel = new MethodChannel(registrar.messenger(), "qr_scan");
-        plugin.channel.setMethodCallHandler(plugin);
-        registrar.addActivityResultListener(plugin);
-
-        ZXingLibrary.initDisplayOpinion(registrar.activity());
-    }
 
     private MethodChannel channel;
 
@@ -93,6 +83,10 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
     @Override
     public void onMethodCall(MethodCall call, @NonNull Result result) {
         Log.i(TAG, "onMethodCall: " + call.method);
+        if (activity == null) {
+            result.error("NO_ACTIVITY", "Plugin is not attached to an activity.", null);
+            return;
+        }
         switch (call.method) {
             case "scan":
                 Log.i(TAG, "scan");
@@ -106,14 +100,22 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
             case "scan_path":
                 this.result = result;
                 String path = call.argument("path");
-                CodeUtils.AnalyzeCallback analyzeCallback = new CustomAnalyzeCallback(this.result, this.activity.getIntent());
-                CodeUtils.analyzeBitmap(path, analyzeCallback);
+                if (path == null || path.isEmpty()) {
+                    this.result.error("INVALID_PATH", "Image path is empty.", null);
+                } else {
+                    CodeUtils.AnalyzeCallback analyzeCallback = new CustomAnalyzeCallback(this.result);
+                    CodeUtils.analyzeBitmap(path, analyzeCallback);
+                }
                 break;
             case "scan_bytes":
                 this.result = result;
                 byte[] bytes = call.argument("bytes");
                 Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes != null ? bytes.length : 0);
-                CodeUtils.analyzeBitmap(bitmap, new CustomAnalyzeCallback(this.result, this.activity.getIntent()));
+                if (bitmap == null) {
+                    this.result.error("INVALID_IMAGE_BYTES", "Unable to decode image bytes.", null);
+                } else {
+                    CodeUtils.analyzeBitmap(bitmap, new CustomAnalyzeCallback(this.result));
+                }
                 break;
             case "generate_barcode":
                 this.result = result;
@@ -149,14 +151,28 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
     @Override
     public boolean onActivityResult(int code, int resultCode, Intent intent) {
         if (code == REQUEST_CODE) {
+            if (this.result == null) {
+                return true;
+            }
+
+            if (resultCode != Activity.RESULT_OK || intent == null) {
+                this.result.success(null);
+                return true;
+            }
+
             if (resultCode == Activity.RESULT_OK && intent != null) {
                 Bundle secondBundle = intent.getBundleExtra("secondBundle");
                 if (secondBundle != null) {
                     try {
-                        CodeUtils.AnalyzeCallback analyzeCallback = new CustomAnalyzeCallback(this.result, intent);
-                        CodeUtils.analyzeBitmap(secondBundle.getString("path"), analyzeCallback);
+                        String path = secondBundle.getString("path");
+                        String uriValue = secondBundle.getString("uri");
+                        Uri uri = uriValue != null ? Uri.parse(uriValue) : null;
+                        if (!analyzeBitmapFromPathOrUri(path, uri)) {
+                            this.result.error("IMAGE_LOAD_FAILED", "Unable to load selected image.", null);
+                        }
                     } catch (Exception e) {
                         e.printStackTrace();
+                        this.result.error("IMAGE_LOAD_FAILED", e.getMessage(), null);
                     }
                 } else {
                     Bundle bundle = intent.getExtras();
@@ -167,27 +183,65 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
                         } else {
                             this.result.success(null);
                         }
+                    } else {
+                        this.result.success(null);
                     }
-                }
-            } else {
-                String errorCode = intent != null ? intent.getStringExtra("ERROR_CODE") : null;
-                if (errorCode != null) {
-                    this.result.error(errorCode, null, null);
                 }
             }
             return true;
         } else if (code == REQUEST_IMAGE) {
-            if (intent != null) {
-                Uri uri = intent.getData();
-                try {
-                    CodeUtils.AnalyzeCallback analyzeCallback = new CustomAnalyzeCallback(this.result, intent);
-                    CodeUtils.analyzeBitmap(ImageUtil.getImageAbsolutePath(activity, uri), analyzeCallback);
-                } catch (Exception e) {
-                    e.printStackTrace();
+            if (this.result == null) {
+                return true;
+            }
+
+            if (resultCode != Activity.RESULT_OK || intent == null) {
+                this.result.success(null);
+                return true;
+            }
+
+            Uri uri = intent.getData();
+            if (uri == null) {
+                this.result.error("INVALID_IMAGE_URI", "No image URI was returned by the picker.", null);
+                return true;
+            }
+
+            try {
+                String path = ImageUtil.getImageAbsolutePath(activity, uri);
+                if (!analyzeBitmapFromPathOrUri(path, uri)) {
+                    this.result.error("IMAGE_LOAD_FAILED", "Unable to load selected image.", null);
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
+                this.result.error("IMAGE_LOAD_FAILED", e.getMessage(), null);
             }
             return true;
         }
         return false;
+    }
+
+    private boolean analyzeBitmapFromPathOrUri(String path, Uri uri) {
+        if (path != null && !path.isEmpty()) {
+            CodeUtils.analyzeBitmap(path, new CustomAnalyzeCallback(this.result));
+            return true;
+        }
+
+        if (uri == null) {
+            return false;
+        }
+
+        try (InputStream inputStream = activity.getContentResolver().openInputStream(uri)) {
+            if (inputStream == null) {
+                return false;
+            }
+            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+            if (bitmap == null) {
+                return false;
+            }
+            CodeUtils.analyzeBitmap(bitmap, new CustomAnalyzeCallback(this.result));
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to read image URI: " + uri, e);
+            return false;
+        }
     }
 }
