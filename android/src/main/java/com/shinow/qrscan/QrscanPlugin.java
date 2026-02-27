@@ -5,17 +5,27 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
-import android.os.Bundle;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.uuzuche.lib_zxing.activity.CodeUtils;
-import com.uuzuche.lib_zxing.activity.ZXingLibrary;
+import com.google.zxing.BinaryBitmap;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.MultiFormatReader;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.NotFoundException;
+import com.google.zxing.RGBLuminanceSource;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.common.HybridBinarizer;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
@@ -26,100 +36,104 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry;
 
-import static com.uuzuche.lib_zxing.activity.CodeUtils.RESULT_SUCCESS;
-import static com.uuzuche.lib_zxing.activity.CodeUtils.RESULT_TYPE;
-
 public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHandler, PluginRegistry.ActivityResultListener {
 
-    private final static String TAG = "QrscanPlugin";
+    private static final String TAG = "QrscanPlugin";
+    private static final int REQUEST_IMAGE = 101;
 
-    private Result result = null;
     private Activity activity;
-    private final int REQUEST_CODE = 100;
-    private final int REQUEST_IMAGE = 101;
-
     private MethodChannel channel;
+    private Result pendingResult;
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
-        Log.i(TAG, "onAttachedToEngine: ");
         channel = new MethodChannel(binding.getBinaryMessenger(), "qr_scan");
         channel.setMethodCallHandler(this);
     }
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
-        channel.setMethodCallHandler(null);
-        channel = null;
-        Log.i(TAG, "onDetachedFromEngine: ");
+        if (channel != null) {
+            channel.setMethodCallHandler(null);
+            channel = null;
+        }
     }
 
     @Override
     public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
-        Log.i(TAG, "onAttachedToActivity: ");
         activity = binding.getActivity();
         binding.addActivityResultListener(this);
-        ZXingLibrary.initDisplayOpinion(activity);
     }
 
     @Override
     public void onDetachedFromActivity() {
+        if (pendingResult != null) {
+            pendingResult.error("ACTIVITY_DETACHED", "Activity detached while waiting for result.", null);
+            pendingResult = null;
+        }
         activity = null;
-        Log.i(TAG, "onDetachedFromActivity: ");
     }
 
     @Override
     public void onDetachedFromActivityForConfigChanges() {
         onDetachedFromActivity();
-        Log.i(TAG, "onDetachedFromActivityForConfigChanges: ");
     }
 
     @Override
     public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
-        Log.i(TAG, "onReattachedToActivityForConfigChanges: ");
         onAttachedToActivity(binding);
     }
 
     @Override
     public void onMethodCall(MethodCall call, @NonNull Result result) {
-        Log.i(TAG, "onMethodCall: " + call.method);
         if (activity == null) {
             result.error("NO_ACTIVITY", "Plugin is not attached to an activity.", null);
             return;
         }
+
         switch (call.method) {
             case "scan":
-                Log.i(TAG, "scan");
-                this.result = result;
-                showBarcodeView();
+                if (pendingResult != null) {
+                    result.error("BUSY", "A scan is already in progress.", null);
+                    return;
+                }
+                pendingResult = result;
+                startCameraScan();
                 break;
             case "scan_photo":
-                this.result = result;
-                choosePhotos();
-                break;
-            case "scan_path":
-                this.result = result;
-                String path = call.argument("path");
-                if (path == null || path.isEmpty()) {
-                    this.result.error("INVALID_PATH", "Image path is empty.", null);
-                } else {
-                    CodeUtils.AnalyzeCallback analyzeCallback = new CustomAnalyzeCallback(this.result);
-                    CodeUtils.analyzeBitmap(path, analyzeCallback);
+                if (pendingResult != null) {
+                    result.error("BUSY", "A scan is already in progress.", null);
+                    return;
                 }
+                pendingResult = result;
+                choosePhoto();
                 break;
-            case "scan_bytes":
-                this.result = result;
+            case "scan_path": {
+                String path = call.argument("path");
+                if (path == null || path.trim().isEmpty()) {
+                    result.error("INVALID_PATH", "Image path is empty.", null);
+                    return;
+                }
+                Bitmap bitmap = BitmapFactory.decodeFile(path);
+                if (bitmap == null) {
+                    result.error("IMAGE_LOAD_FAILED", "Unable to decode image from path.", null);
+                    return;
+                }
+                result.success(decodeBitmap(bitmap));
+                break;
+            }
+            case "scan_bytes": {
                 byte[] bytes = call.argument("bytes");
                 Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes != null ? bytes.length : 0);
                 if (bitmap == null) {
-                    this.result.error("INVALID_IMAGE_BYTES", "Unable to decode image bytes.", null);
-                } else {
-                    CodeUtils.analyzeBitmap(bitmap, new CustomAnalyzeCallback(this.result));
+                    result.error("INVALID_IMAGE_BYTES", "Unable to decode image bytes.", null);
+                    return;
                 }
+                result.success(decodeBitmap(bitmap));
                 break;
+            }
             case "generate_barcode":
-                this.result = result;
-                generateQrCode(call);
+                generateQrCode(call, result);
                 break;
             default:
                 result.notImplemented();
@@ -127,121 +141,117 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
         }
     }
 
-    private void showBarcodeView() {
-        Intent intent = new Intent(activity, SecondActivity.class);
-        activity.startActivityForResult(intent, REQUEST_CODE);
+    private void startCameraScan() {
+        IntentIntegrator integrator = new IntentIntegrator(activity);
+        integrator.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES);
+        integrator.setOrientationLocked(false);
+        integrator.setPrompt("Scan a barcode or QR code");
+        integrator.initiateScan();
     }
 
-    private void choosePhotos() {
-        Intent intent = new Intent();
-        intent.setAction(Intent.ACTION_PICK);
+    private void choosePhoto() {
+        Intent intent = new Intent(Intent.ACTION_PICK);
         intent.setType("image/*");
         activity.startActivityForResult(intent, REQUEST_IMAGE);
     }
 
-    private void generateQrCode(MethodCall call) {
+    private void generateQrCode(MethodCall call, Result result) {
         String code = call.argument("code");
-        Bitmap bitmap = CodeUtils.createImage(code, 400, 400, null);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
-        byte[] datas = baos.toByteArray();
-        this.result.success(datas);
+        if (code == null || code.isEmpty()) {
+            result.error("INVALID_CODE", "Code must not be empty.", null);
+            return;
+        }
+
+        try {
+            Map<EncodeHintType, Object> hints = new HashMap<>();
+            hints.put(EncodeHintType.CHARACTER_SET, StandardCharsets.UTF_8.name());
+
+            BitMatrix matrix = new MultiFormatWriter().encode(code, com.google.zxing.BarcodeFormat.QR_CODE, 400, 400, hints);
+            int width = matrix.getWidth();
+            int height = matrix.getHeight();
+            int[] pixels = new int[width * height];
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    pixels[y * width + x] = matrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+                }
+            }
+
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+            result.success(output.toByteArray());
+        } catch (Exception e) {
+            result.error("GENERATE_FAILED", e.getMessage(), null);
+        }
     }
 
     @Override
-    public boolean onActivityResult(int code, int resultCode, Intent intent) {
-        if (code == REQUEST_CODE) {
-            if (this.result == null) {
-                return true;
-            }
-
-            if (resultCode != Activity.RESULT_OK || intent == null) {
-                this.result.success(null);
-                return true;
-            }
-
-            if (resultCode == Activity.RESULT_OK && intent != null) {
-                Bundle secondBundle = intent.getBundleExtra("secondBundle");
-                if (secondBundle != null) {
-                    try {
-                        String path = secondBundle.getString("path");
-                        String uriValue = secondBundle.getString("uri");
-                        Uri uri = uriValue != null ? Uri.parse(uriValue) : null;
-                        if (!analyzeBitmapFromPathOrUri(path, uri)) {
-                            this.result.error("IMAGE_LOAD_FAILED", "Unable to load selected image.", null);
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        this.result.error("IMAGE_LOAD_FAILED", e.getMessage(), null);
-                    }
-                } else {
-                    Bundle bundle = intent.getExtras();
-                    if (bundle != null) {
-                        if (bundle.getInt(RESULT_TYPE) == RESULT_SUCCESS) {
-                            String barcode = bundle.getString(CodeUtils.RESULT_STRING);
-                            this.result.success(barcode);
-                        } else {
-                            this.result.success(null);
-                        }
-                    } else {
-                        this.result.success(null);
-                    }
-                }
-            }
-            return true;
-        } else if (code == REQUEST_IMAGE) {
-            if (this.result == null) {
-                return true;
-            }
-
-            if (resultCode != Activity.RESULT_OK || intent == null) {
-                this.result.success(null);
-                return true;
-            }
-
-            Uri uri = intent.getData();
-            if (uri == null) {
-                this.result.error("INVALID_IMAGE_URI", "No image URI was returned by the picker.", null);
-                return true;
-            }
-
-            try {
-                String path = ImageUtil.getImageAbsolutePath(activity, uri);
-                if (!analyzeBitmapFromPathOrUri(path, uri)) {
-                    this.result.error("IMAGE_LOAD_FAILED", "Unable to load selected image.", null);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                this.result.error("IMAGE_LOAD_FAILED", e.getMessage(), null);
+    public boolean onActivityResult(int requestCode, int resultCode, Intent data) {
+        IntentResult cameraResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (cameraResult != null) {
+            if (pendingResult != null) {
+                pendingResult.success(cameraResult.getContents());
+                pendingResult = null;
             }
             return true;
         }
+
+        if (requestCode == REQUEST_IMAGE) {
+            if (pendingResult == null) {
+                return true;
+            }
+
+            if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
+                pendingResult.success(null);
+                pendingResult = null;
+                return true;
+            }
+
+            Uri uri = data.getData();
+            try {
+                Bitmap bitmap = decodeUriToBitmap(uri);
+                if (bitmap == null) {
+                    pendingResult.error("IMAGE_LOAD_FAILED", "Unable to load selected image.", null);
+                } else {
+                    pendingResult.success(decodeBitmap(bitmap));
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Photo scan failed", e);
+                pendingResult.error("SCAN_FAILED", e.getMessage(), null);
+            } finally {
+                pendingResult = null;
+            }
+            return true;
+        }
+
         return false;
     }
 
-    private boolean analyzeBitmapFromPathOrUri(String path, Uri uri) {
-        if (path != null && !path.isEmpty()) {
-            CodeUtils.analyzeBitmap(path, new CustomAnalyzeCallback(this.result));
-            return true;
-        }
-
-        if (uri == null) {
-            return false;
-        }
-
-        try (InputStream inputStream = activity.getContentResolver().openInputStream(uri)) {
-            if (inputStream == null) {
-                return false;
+    private Bitmap decodeUriToBitmap(Uri uri) throws IOException {
+        try (InputStream input = activity.getContentResolver().openInputStream(uri)) {
+            if (input == null) {
+                return null;
             }
-            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-            if (bitmap == null) {
-                return false;
-            }
-            CodeUtils.analyzeBitmap(bitmap, new CustomAnalyzeCallback(this.result));
-            return true;
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to read image URI: " + uri, e);
-            return false;
+            return BitmapFactory.decodeStream(input);
+        }
+    }
+
+    private String decodeBitmap(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int[] pixels = new int[width * height];
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+
+        RGBLuminanceSource source = new RGBLuminanceSource(width, height, pixels);
+        BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(source));
+
+        try {
+            com.google.zxing.Result decoded = new MultiFormatReader().decode(binaryBitmap);
+            return decoded.getText();
+        } catch (NotFoundException e) {
+            return null;
         }
     }
 }

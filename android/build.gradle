@@ -18,6 +18,11 @@ buildscript {
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 
+repositories {
+    google()
+    mavenCentral()
+}
+
 
 android {
     namespace = 'com.shinow.qrscan'
@@ -62,10 +67,8 @@ android {
 
 
 dependencies {
-    implementation 'com.squareup.picasso:picasso:2.71828'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'pub.devrel:easypermissions:3.0.0'
-    implementation 'com.github.leyan95:android-zxingLibrary:0.1.4-PRE'
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    implementation 'com.google.zxing:core:3.5.3'
     compileOnly 'androidx.annotation:annotation:1.7.0'
 }

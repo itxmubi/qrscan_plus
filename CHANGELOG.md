@@ -1,3 +1,9 @@
+## [1.0.7]
+- Removed JitPack-only dependency path from Android implementation.
+- Migrated Android scanner implementation to Maven Central ZXing dependencies (`com.journeyapps:zxing-android-embedded` + `com.google.zxing:core`).
+- Consumers no longer need to manually add `https://jitpack.io` to their app Gradle repositories.
+- Refactored Android scan flows (`scan`, `scanPhoto`, `scanPath`, `scanBytes`, `generateBarCode`) to work without `android-zxingLibrary`.
+
 ## [1.0.6]
 - Updated Android Gradle Plugin compatibility for modern AndroidX dependencies (AGP 8.9.1 support in plugin/example).
 - Fixed Android compile issue by removing obsolete Flutter v1 `Registrar` registration path.

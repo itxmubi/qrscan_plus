@@ -20,50 +20,23 @@ Notes:
 
 ```yaml
 dependencies:
-  qrscan_plus: ^1.0.6
+  qrscan_plus: ^1.0.7
 ```
 
 ## Android Setup
 
-### 1) Add JitPack repository
-This plugin depends on `android-zxingLibrary` from JitPack. Add JitPack in your Android repositories.
+No additional Gradle repository setup is required for this plugin.
 
-If you use `settings.gradle(.kts)` with `dependencyResolutionManagement`:
-
-```kotlin
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-        maven("https://jitpack.io")
-    }
-}
-```
-
-If your project still uses legacy `allprojects` repositories:
-
-```gradle
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-        maven { url 'https://jitpack.io' }
-    }
-}
-```
-
-### 2) Permissions
-Add required permissions in your app manifest (`android/app/src/main/AndroidManifest.xml`):
+### Permissions
+Add camera permission in your app manifest (`android/app/src/main/AndroidManifest.xml`):
 
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 ```
 
 Notes:
-- Gallery picking with `scanPhoto()` may work without manually requesting storage permission on modern Android.
-- If your app explicitly requests media/storage permissions at runtime, use Android-version-aware logic (Android 13+ media permissions differ from legacy storage permissions).
+- `scanPhoto()` uses the system image picker and does not require adding JitPack or legacy storage permissions for this plugin flow.
+- If your app has its own direct file/media access flows, handle runtime media/storage permissions separately based on Android version.
 
 ## iOS Setup
 
