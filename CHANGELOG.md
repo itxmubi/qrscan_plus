@@ -1,3 +1,7 @@
+## [1.0.8]
+- Update Readme
+
+
 ## [1.0.7+1]
 - Added iOS implementations for `scan_bytes` and `scan_path` to match method-channel API coverage and prevent `MissingPluginException`.
 - Updated iOS barcode detection flow to share a common detection path with improved error propagation.
