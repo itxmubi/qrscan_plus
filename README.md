@@ -31,12 +31,22 @@
 ## ✨ Features
 
 - 📷 **Camera scan** — launch the device camera to scan any QR code or barcode in real time
-- 🖼 **Gallery scan** — pick an image from the photo library and decode it
+- 🖼 **Gallery scan** — pick an image with the system photo picker and decode it (no storage permissions)
 - 📁 **Path scan** — decode a barcode from a local file path
 - 🔢 **Bytes scan** — decode a barcode directly from raw `Uint8List` bytes
 - 🏗 **QR code generator** — generate a QR code image from any string
 - ✅ **No JitPack** — Android dependencies are on Maven Central; no extra Gradle config needed
-- 🍎 **iOS 12+** supported with native AVFoundation
+- 🍎 **iOS 13+** with native AVFoundation & Vision — Swift Package Manager and CocoaPods supported
+
+---
+
+## 📋 Requirements
+
+| | Minimum | Notes |
+|---|---|---|
+| Flutter | 3.38 (Dart 3.10) | Tested on Flutter 3.41 and 3.47 |
+| Android | API 24 (Android 7.0) | Compiled against API 36 (Android 16); Java 17 |
+| iOS | 13.0 | Tested with Xcode 26 / iOS 26 SDK |
 
 ---
 
@@ -50,7 +60,7 @@
 | `scanBytes(bytes)` | ✅ | ✅ | Scan from raw byte data |
 | `generateBarCode(text)` | ✅ | ✅ | Generate a QR code image |
 
-> **Note:** `generateBarCode` returns PNG bytes on iOS and image bytes on Android.
+> **Note:** `generateBarCode` returns PNG bytes on both platforms.
 
 ---
 
@@ -60,7 +70,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  qrscan_plus: ^1.0.8
+  qrscan_plus: ^2.0.0
 ```
 
 Then run:
@@ -75,31 +85,28 @@ flutter pub get
 
 No additional Gradle repository setup is needed. All dependencies are on Maven Central.
 
+Make sure your app's `minSdk` is at least **24** (the Flutter default).
+
 ### Permissions
 
-Add camera permission to `android/app/src/main/AndroidManifest.xml`:
+The plugin's manifest already declares the camera permission. The camera permission is requested at runtime when `scan()` opens the scanner.
 
-```xml
-<uses-permission android:name="android.permission.CAMERA" />
-```
-
-> `scanPhoto()` uses the system image picker — no JitPack or legacy storage permissions required for this plugin. If your app directly accesses files or media, handle runtime permissions based on your Android version separately.
+> `scanPhoto()` uses the system photo picker on Android 13+ (and the gallery picker on older versions) — no storage or media permissions are required for this plugin. If your app directly accesses files or media, handle runtime permissions based on your Android version separately.
 
 ---
 
 ## 🍎 iOS Setup
 
-Minimum deployment target: **iOS 12.0**
+Minimum deployment target: **iOS 13.0**
 
-Add the following keys to your `ios/Runner/Info.plist`:
+Add the following key to your `ios/Runner/Info.plist`:
 
 ```xml
 <key>NSCameraUsageDescription</key>
 <string>This app needs camera access to scan QR codes and barcodes.</string>
-
-<key>NSPhotoLibraryUsageDescription</key>
-<string>This app needs photo library access to scan QR codes from images.</string>
 ```
+
+> `scanPhoto()` uses the system photo picker, which runs outside your app, so `NSPhotoLibraryUsageDescription` is **not** required.
 
 ---
 
@@ -164,7 +171,7 @@ if (qrImage != null) {
 
 ## 🛡 Error Handling
 
-Always wrap scan and generate calls in a try-catch to handle user cancellation or permission errors gracefully:
+The scan methods return `null` when the user cancels or no code is found. Wrap calls in a try-catch to handle permission and image errors gracefully:
 
 ```dart
 import 'package:flutter/services.dart';
@@ -184,9 +191,19 @@ Common error codes:
 
 | Code | Meaning |
 |---|---|
-| `PERMISSION_DENIED` | Camera or photo library permission was denied |
-| `INVALID_ARGUMENT` | Null or empty input passed to scanBytes / scanPath |
-| `SCAN_FAILED` | No barcode detected in the provided image |
+| `PERMISSION_DENIED` | Camera permission was denied (iOS) |
+| `BUSY` | A `scan()` or `scanPhoto()` call is already in progress |
+| `INVALID_ARGUMENT` / `INVALID_PATH` | Null or empty input passed to scanBytes / scanPath |
+| `INVALID_IMAGE` / `INVALID_IMAGE_BYTES` / `IMAGE_LOAD_FAILED` | The image could not be decoded |
+| `SCAN_FAILED` | Reading the selected image failed |
+
+---
+
+## ⬆️ Migrating from 1.x
+
+- All scan methods now return `Future<String?>` and `generateBarCode()` returns `Future<Uint8List?>`. Handle `null` (cancelled / nothing found) instead of catching a `TypeError`.
+- Raise your Android `minSdk` to 24 and your iOS deployment target to 13.0 if they are lower.
+- You can remove `NSPhotoLibraryUsageDescription` from `Info.plist` if nothing else in your app needs it.
 
 ---
 
@@ -198,7 +215,7 @@ Common error codes:
 | `scanBytes()` support | ✅ | ❌ | ❌ |
 | `scanPath()` support | ✅ | ❌ | ❌ |
 | QR code generation | ✅ | ❌ | ❌ |
-| iOS 12+ support | ✅ | ✅ | ✅ |
+| iOS 13+ support | ✅ | ✅ | ✅ |
 | Zero native iOS dependencies | ✅ | ❌ | ❌ |
 | Maven Central only (Android) | ✅ | ❌ | ✅ |
 
@@ -208,13 +225,11 @@ Common error codes:
 
 See [CHANGELOG.md](https://github.com/itxmubi/qrscan_plus/blob/master/CHANGELOG.md) for the full version history.
 
-**Latest — v1.0.7+1:**
-- Added iOS implementations for `scanBytes` and `scanPath` — prevents `MissingPluginException`
-- Improved iOS barcode detection with shared detection path and better error propagation
-
-**v1.0.7:**
-- Removed JitPack dependency — migrated Android to Maven Central (`com.journeyapps:zxing-android-embedded`)
-- Consumers no longer need to add `https://jitpack.io` to their Gradle repos
+**Latest — v2.0.0:**
+- Updated for the latest Flutter (3.47), Android 16 (API 36) and iOS 26
+- Nullable return types — `null` when a scan is cancelled or no code is found
+- Android 13+ system photo picker; iOS `PHPickerViewController` — no photo permissions needed
+- Swift Package Manager support and privacy manifest on iOS
 
 ---
 

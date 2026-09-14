@@ -9,26 +9,34 @@ const CameraAccessDenied = 'PERMISSION_NOT_GRANTED';
 /// method channel.
 const MethodChannel _channel = MethodChannel('qr_scan');
 
-/// Scanning Bar Code or QR Code return content
-Future<String> scan() async => await _channel.invokeMethod('scan');
+/// Scanning Bar Code or QR Code return content.
+///
+/// Returns `null` when the scanner is closed without reading a code.
+Future<String?> scan() => _channel.invokeMethod<String>('scan');
 
-/// Scanning Photo Bar Code or QR Code return content
-Future<String> scanPhoto() async => await _channel.invokeMethod('scan_photo');
+/// Scanning Photo Bar Code or QR Code return content.
+///
+/// Returns `null` when the picker is cancelled or no code is found.
+Future<String?> scanPhoto() => _channel.invokeMethod<String>('scan_photo');
 
-// Scanning the image of the specified path
-Future<String> scanPath(String path) async {
+/// Scanning the image of the specified path.
+///
+/// Returns `null` when no code is found.
+Future<String?> scanPath(String path) {
   assert(path.isNotEmpty);
-  return await _channel.invokeMethod('scan_path', {'path': path});
+  return _channel.invokeMethod<String>('scan_path', {'path': path});
 }
 
-// Parse to code string with uint8list
-Future<String> scanBytes(Uint8List uint8list) async {
+/// Parse to code string with uint8list.
+///
+/// Returns `null` when no code is found.
+Future<String?> scanBytes(Uint8List uint8list) {
   assert(uint8list.isNotEmpty);
-  return await _channel.invokeMethod('scan_bytes', {'bytes': uint8list});
+  return _channel.invokeMethod<String>('scan_bytes', {'bytes': uint8list});
 }
 
-/// Generat§ing Bar Code Uint8List
-Future<Uint8List> generateBarCode(String code) async {
+/// Generating QR Code PNG bytes.
+Future<Uint8List?> generateBarCode(String code) {
   assert(code.isNotEmpty);
-  return await _channel.invokeMethod('generate_barcode', {'code': code});
+  return _channel.invokeMethod<Uint8List>('generate_barcode', {'code': code});
 }

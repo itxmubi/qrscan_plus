@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -17,7 +16,7 @@ class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  _MyAppState createState() => _MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
@@ -158,19 +157,14 @@ class _MyAppState extends State<MyApp> {
                           flex: 5,
                           child: GestureDetector(
                             onTap: () async {
+                              final messenger = ScaffoldMessenger.of(context);
                               final success =
                                   await ImageGallerySaverPlus.saveImage(
                                       this.bytes);
-                              SnackBar snackBar;
-                              if (success['isSuccess']) {
-                                snackBar = SnackBar(
-                                    content: Text('Successful Preservation!'));
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(snackBar);
-                              } else {
-                                snackBar =
-                                    SnackBar(content: Text('Save failed!'));
-                              }
+                              messenger.showSnackBar(SnackBar(
+                                  content: Text(success['isSuccess'] == true
+                                      ? 'Successful Preservation!'
+                                      : 'Save failed!')));
                             },
                             child: Text(
                               'save',
@@ -277,11 +271,10 @@ class _MyAppState extends State<MyApp> {
 
   Future _scan() async {
     try {
-      String barcode = await scanner.scan();
+      final barcode = await scanner.scan();
 
-      log(barcode);
-      _outputController!.text = barcode;
-      // }
+      log(barcode ?? 'Scan cancelled');
+      _outputController!.text = barcode ?? '';
     } catch (e) {
       log(e.toString());
     }
@@ -290,8 +283,9 @@ class _MyAppState extends State<MyApp> {
   Future<void> _scanPhoto() async {
     try {
       final barcode = await scanner.scanPhoto();
-      _outputController!.text =
-          barcode.isNotEmpty ? barcode : 'No barcode/QR code found.';
+      _outputController!.text = barcode != null && barcode.isNotEmpty
+          ? barcode
+          : 'No barcode/QR code found.';
     } on PlatformException catch (e) {
       log('scanPhoto platform error: ${e.code} ${e.message}');
       _outputController!.text =
@@ -303,21 +297,16 @@ class _MyAppState extends State<MyApp> {
   }
 
   // Future _scanPath(String path) async {
-  //   await Permission.storage.request();
-  //   String barcode = await scanner.scanPath(path);
-  //   this._outputController!.text = barcode;
+  //   String? barcode = await scanner.scanPath(path);
+  //   this._outputController!.text = barcode ?? '';
   // }
 
   Future _scanBytes() async {
-    File file = await ImagePicker()
-        .pickImage(source: ImageSource.camera)
-        .then((picked) {
-      if (picked != null) return File(picked.path);
-      return File(picked!.path);
-    });
-    Uint8List bytes = file.readAsBytesSync();
-    String barcode = await scanner.scanBytes(bytes);
-    _outputController!.text = barcode;
+    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+    if (picked == null) return;
+    Uint8List bytes = await picked.readAsBytes();
+    String? barcode = await scanner.scanBytes(bytes);
+    _outputController!.text = barcode ?? 'No barcode/QR code found.';
   }
 
   Future<void> _generateBarCode(String inputCode) async {
@@ -334,7 +323,9 @@ class _MyAppState extends State<MyApp> {
 
     try {
       final result = await scanner.generateBarCode(code);
-      setState(() => bytes = result);
+      if (result != null) {
+        setState(() => bytes = result);
+      }
     } on PlatformException catch (e) {
       log('generateBarCode platform error: ${e.code} ${e.message}');
       _outputController!.text =

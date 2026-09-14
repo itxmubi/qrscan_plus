@@ -1,10 +1,13 @@
 package com.shinow.qrscan;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
+import android.provider.MediaStore;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -40,8 +43,12 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
 
     private static final String TAG = "QrscanPlugin";
     private static final int REQUEST_IMAGE = 101;
+    // Photos from 50-200 MP cameras are downsampled to at most this many pixels on the longest side,
+    // which keeps the decoded bitmap well within the heap while leaving codes readable.
+    private static final int MAX_DECODE_DIMENSION = 4096;
 
     private Activity activity;
+    private ActivityPluginBinding activityBinding;
     private MethodChannel channel;
     private Result pendingResult;
 
@@ -61,27 +68,37 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
 
     @Override
     public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
+        activityBinding = binding;
         activity = binding.getActivity();
         binding.addActivityResultListener(this);
     }
 
     @Override
     public void onDetachedFromActivity() {
+        releaseActivity();
         if (pendingResult != null) {
             pendingResult.error("ACTIVITY_DETACHED", "Activity detached while waiting for result.", null);
             pendingResult = null;
         }
-        activity = null;
     }
 
     @Override
     public void onDetachedFromActivityForConfigChanges() {
-        onDetachedFromActivity();
+        // The activity is recreated right away, so keep any pending scan alive.
+        releaseActivity();
     }
 
     @Override
     public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
         onAttachedToActivity(binding);
+    }
+
+    private void releaseActivity() {
+        if (activityBinding != null) {
+            activityBinding.removeActivityResultListener(this);
+            activityBinding = null;
+        }
+        activity = null;
     }
 
     @Override
@@ -114,7 +131,7 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
                     result.error("INVALID_PATH", "Image path is empty.", null);
                     return;
                 }
-                Bitmap bitmap = BitmapFactory.decodeFile(path);
+                Bitmap bitmap = decodeFile(path);
                 if (bitmap == null) {
                     result.error("IMAGE_LOAD_FAILED", "Unable to decode image from path.", null);
                     return;
@@ -124,7 +141,7 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
             }
             case "scan_bytes": {
                 byte[] bytes = call.argument("bytes");
-                Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes != null ? bytes.length : 0);
+                Bitmap bitmap = decodeBytes(bytes);
                 if (bitmap == null) {
                     result.error("INVALID_IMAGE_BYTES", "Unable to decode image bytes.", null);
                     return;
@@ -150,9 +167,22 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
     }
 
     private void choosePhoto() {
-        Intent intent = new Intent(Intent.ACTION_PICK);
-        intent.setType("image/*");
-        activity.startActivityForResult(intent, REQUEST_IMAGE);
+        // Android 13+ ships the system photo picker, which needs no storage or media permission.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                activity.startActivityForResult(new Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*"), REQUEST_IMAGE);
+                return;
+            } catch (ActivityNotFoundException e) {
+                Log.w(TAG, "System photo picker unavailable, falling back to ACTION_PICK", e);
+            }
+        }
+
+        try {
+            activity.startActivityForResult(new Intent(Intent.ACTION_PICK).setType("image/*"), REQUEST_IMAGE);
+        } catch (ActivityNotFoundException e) {
+            pendingResult.error("NO_IMAGE_PICKER", "No activity available to pick an image.", null);
+            pendingResult = null;
+        }
     }
 
     private void generateQrCode(MethodCall call, Result result) {
@@ -211,7 +241,7 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
 
             Uri uri = data.getData();
             try {
-                Bitmap bitmap = decodeUriToBitmap(uri);
+                Bitmap bitmap = decodeUri(uri);
                 if (bitmap == null) {
                     pendingResult.error("IMAGE_LOAD_FAILED", "Unable to load selected image.", null);
                 } else {
@@ -229,13 +259,52 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
         return false;
     }
 
-    private Bitmap decodeUriToBitmap(Uri uri) throws IOException {
+    private static Bitmap decodeFile(String path) {
+        BitmapFactory.Options bounds = boundsOnlyOptions();
+        BitmapFactory.decodeFile(path, bounds);
+        return BitmapFactory.decodeFile(path, sampledOptions(bounds));
+    }
+
+    private static Bitmap decodeBytes(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
+        BitmapFactory.Options bounds = boundsOnlyOptions();
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, sampledOptions(bounds));
+    }
+
+    private Bitmap decodeUri(Uri uri) throws IOException {
+        BitmapFactory.Options bounds = boundsOnlyOptions();
         try (InputStream input = activity.getContentResolver().openInputStream(uri)) {
             if (input == null) {
                 return null;
             }
-            return BitmapFactory.decodeStream(input);
+            BitmapFactory.decodeStream(input, null, bounds);
         }
+        try (InputStream input = activity.getContentResolver().openInputStream(uri)) {
+            if (input == null) {
+                return null;
+            }
+            return BitmapFactory.decodeStream(input, null, sampledOptions(bounds));
+        }
+    }
+
+    private static BitmapFactory.Options boundsOnlyOptions() {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        return options;
+    }
+
+    private static BitmapFactory.Options sampledOptions(BitmapFactory.Options bounds) {
+        int longestSide = Math.max(bounds.outWidth, bounds.outHeight);
+        int sampleSize = 1;
+        while (longestSide / sampleSize > MAX_DECODE_DIMENSION) {
+            sampleSize *= 2;
+        }
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = sampleSize;
+        return options;
     }
 
     private String decodeBitmap(Bitmap bitmap) {
