@@ -11,11 +11,12 @@ void main() {
 
   setUp(() {
     calls.clear();
+    response = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      calls.add(call);
-      return response;
-    });
+          calls.add(call);
+          return response;
+        });
   });
 
   tearDown(() {
@@ -51,5 +52,36 @@ void main() {
     expect(await scanner.generateBarCode('hi'), response);
     expect(calls.single.method, 'generate_barcode');
     expect(calls.single.arguments, {'code': 'hi'});
+  });
+  test('invalid inputs fail before reaching native code', () async {
+    final invalidArgument = isA<PlatformException>().having(
+      (error) => error.code,
+      'code',
+      'INVALID_ARGUMENT',
+    );
+    await expectLater(scanner.scanPath('  '), throwsA(invalidArgument));
+    await expectLater(
+      scanner.scanBytes(Uint8List(0)),
+      throwsA(invalidArgument),
+    );
+    await expectLater(scanner.generateBarCode(''), throwsA(invalidArgument));
+    expect(calls, isEmpty);
+  });
+
+  test('native permission errors retain their documented code', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) async {
+          throw PlatformException(code: scanner.cameraAccessDenied);
+        });
+    await expectLater(
+      scanner.scan(),
+      throwsA(
+        isA<PlatformException>().having(
+          (error) => error.code,
+          'code',
+          'PERMISSION_DENIED',
+        ),
+      ),
+    );
   });
 }

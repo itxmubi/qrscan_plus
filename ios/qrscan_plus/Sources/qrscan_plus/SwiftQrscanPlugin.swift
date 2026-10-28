@@ -118,7 +118,7 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
 
     private func scanBytes(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         let arguments = call.arguments as? [String: Any] ?? [:]
-        guard let typedData = arguments["bytes"] as? FlutterStandardTypedData else {
+        guard let typedData = arguments["bytes"] as? FlutterStandardTypedData, !typedData.data.isEmpty else {
             result(FlutterError(code: "INVALID_ARGUMENT", message: "Missing 'bytes'", details: nil))
             return
         }
@@ -134,7 +134,7 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
 
     private func scanPath(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         let arguments = call.arguments as? [String: Any] ?? [:]
-        guard let path = arguments["path"] as? String, !path.isEmpty else {
+        guard let path = arguments["path"] as? String, !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             result(FlutterError(code: "INVALID_ARGUMENT", message: "Missing 'path'", details: nil))
             return
         }
@@ -207,7 +207,15 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
         }
         session.addOutput(metadataOutput)
         metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-        metadataOutput.metadataObjectTypes = [.qr]
+        // Use only formats supported by this device and OS version.
+        let formats: [AVMetadataObject.ObjectType] = [
+            .qr, .ean8, .ean13, .upce, .code39, .code39Mod43,
+            .code93, .code128, .pdf417, .aztec, .dataMatrix,
+            .interleaved2of5, .itf14
+        ]
+        metadataOutput.metadataObjectTypes = formats.filter {
+            metadataOutput.availableMetadataObjectTypes.contains($0)
+        }
 
         // Create container view
         let scanView = UIView(frame: viewController.view.bounds)
@@ -328,6 +336,12 @@ public class SwiftQrscanPlugin: NSObject, FlutterPlugin, AVCaptureMetadataOutput
     private func detectBarcode(_ image: CIImage, completion: @escaping (Any?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let request = VNDetectBarcodesRequest()
+            #if targetEnvironment(simulator)
+            // Use the CPU-compatible revision when the simulator lacks hardware inference.
+            // Physical devices keep Vision's default revision and acceleration.
+            request.revision = VNDetectBarcodesRequestRevision1
+            request.usesCPUOnly = true
+            #endif
             let handler = VNImageRequestHandler(ciImage: image)
             let value: Any?
             do {

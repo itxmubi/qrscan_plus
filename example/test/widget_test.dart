@@ -1,16 +1,68 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility that Flutter provides. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qrscan_example/main.dart';
 
 void main() {
-  testWidgets('Verify Platform version', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('qr_scan');
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets('empty generation shows validation without a platform call', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
+    await tester.tap(find.text('Generate QR code'));
+    await tester.pumpAndSettle();
+    expect(find.text('Please enter some text.'), findsOneWidget);
+  });
+
+  testWidgets('scanner displays permission failures', (tester) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) async {
+          throw PlatformException(code: 'PERMISSION_DENIED');
+        });
+    await tester.pumpWidget(const MyApp());
+    await tester.ensureVisible(find.text('Scan with camera'));
+    await tester.tap(find.text('Scan with camera'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Camera permission denied.'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Scan with camera'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+  });
+  testWidgets('pending scan disables actions and survives widget disposal', (
+    tester,
+  ) async {
+    final reply = Completer<String?>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) => reply.future);
+    await tester.pumpWidget(const MyApp());
+    await tester.ensureVisible(find.text('Scan with camera'));
+    await tester.tap(find.text('Scan with camera'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Scan with camera'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    reply.complete('late result');
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

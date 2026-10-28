@@ -2,11 +2,14 @@ package com.shinow.qrscan;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Log;
 
@@ -22,6 +25,8 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+import com.google.zxing.client.android.Intents;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,6 +34,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
@@ -47,6 +54,9 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
     // which keeps the decoded bitmap well within the heap while leaving codes readable.
     private static final int MAX_DECODE_DIMENSION = 4096;
 
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private ExecutorService worker;
+    private Context context;
     private Activity activity;
     private ActivityPluginBinding activityBinding;
     private MethodChannel channel;
@@ -54,12 +64,20 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
+        context = binding.getApplicationContext();
+        worker = Executors.newSingleThreadExecutor();
         channel = new MethodChannel(binding.getBinaryMessenger(), "qr_scan");
         channel.setMethodCallHandler(this);
     }
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        if (pendingResult != null) {
+            pendingResult.error("ENGINE_DETACHED", "Engine detached while scanning.", null);
+            pendingResult = null;
+        }
+        worker.shutdown();
+        context = null;
         if (channel != null) {
             channel.setMethodCallHandler(null);
             channel = null;
@@ -103,7 +121,7 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
 
     @Override
     public void onMethodCall(MethodCall call, @NonNull Result result) {
-        if (activity == null) {
+        if ((call.method.equals("scan") || call.method.equals("scan_photo")) && activity == null) {
             result.error("NO_ACTIVITY", "Plugin is not attached to an activity.", null);
             return;
         }
@@ -128,25 +146,22 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
             case "scan_path": {
                 String path = call.argument("path");
                 if (path == null || path.trim().isEmpty()) {
-                    result.error("INVALID_PATH", "Image path is empty.", null);
+                    result.error("INVALID_ARGUMENT", "Image path is empty.", null);
                     return;
                 }
-                Bitmap bitmap = decodeFile(path);
-                if (bitmap == null) {
-                    result.error("IMAGE_LOAD_FAILED", "Unable to decode image from path.", null);
-                    return;
-                }
-                result.success(decodeBitmap(bitmap));
+                runInBackground(result, () -> {
+                    String filePath = path.startsWith("file://") ? Uri.parse(path).getPath() : path;
+                    return scanBitmap(decodeFile(filePath));
+                });
                 break;
             }
             case "scan_bytes": {
                 byte[] bytes = call.argument("bytes");
-                Bitmap bitmap = decodeBytes(bytes);
-                if (bitmap == null) {
-                    result.error("INVALID_IMAGE_BYTES", "Unable to decode image bytes.", null);
+                if (bytes == null || bytes.length == 0) {
+                    result.error("INVALID_ARGUMENT", "Image bytes must not be empty.", null);
                     return;
                 }
-                result.success(decodeBitmap(bitmap));
+                runInBackground(result, () -> scanBitmap(decodeBytes(bytes)));
                 break;
             }
             case "generate_barcode":
@@ -163,7 +178,12 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
         integrator.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES);
         integrator.setOrientationLocked(false);
         integrator.setPrompt("Scan a barcode or QR code");
-        integrator.initiateScan();
+        try {
+            integrator.initiateScan();
+        } catch (RuntimeException e) {
+            pendingResult.error("SETUP_FAILED", e.getMessage(), null);
+            pendingResult = null;
+        }
     }
 
     private void choosePhoto() {
@@ -185,36 +205,94 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
         }
     }
 
+    private interface BackgroundOperation {
+        Object run() throws Exception;
+    }
+
+    // Only immutable input and an application context may cross onto the worker.
+    // Flutter replies and pending UI state always stay on the main thread.
+    private void runInBackground(Result result, BackgroundOperation operation) {
+        final MethodChannel originatingChannel = channel;
+        worker.execute(() -> {
+            Object value = null;
+            Exception failure = null;
+            try {
+                value = operation.run();
+            } catch (Exception e) {
+                failure = e;
+            }
+            final Object reply = value;
+            final Exception error = failure;
+            mainHandler.post(() -> {
+                if (channel != originatingChannel) return;
+                if (error == null) {
+                    result.success(reply);
+                } else {
+                    result.error(error instanceof InvalidImageException ? "INVALID_IMAGE" : "SCAN_FAILED",
+                            error.getMessage(), null);
+                }
+            });
+        });
+    }
+
+    private static class InvalidImageException extends Exception {
+        InvalidImageException() {
+            super("Unable to decode image.");
+        }
+    }
+
+    private String scanBitmap(Bitmap bitmap) throws InvalidImageException {
+        if (bitmap == null) {
+            throw new InvalidImageException();
+        }
+        try {
+            return decodeBitmap(bitmap);
+        } finally {
+            bitmap.recycle();
+        }
+    }
+
     private void generateQrCode(MethodCall call, Result result) {
         String code = call.argument("code");
         if (code == null || code.isEmpty()) {
-            result.error("INVALID_CODE", "Code must not be empty.", null);
+            result.error("INVALID_ARGUMENT", "Code must not be empty.", null);
             return;
         }
-
-        try {
-            Map<EncodeHintType, Object> hints = new HashMap<>();
-            hints.put(EncodeHintType.CHARACTER_SET, StandardCharsets.UTF_8.name());
-
-            BitMatrix matrix = new MultiFormatWriter().encode(code, com.google.zxing.BarcodeFormat.QR_CODE, 400, 400, hints);
-            int width = matrix.getWidth();
-            int height = matrix.getHeight();
-            int[] pixels = new int[width * height];
-
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    pixels[y * width + x] = matrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+        final MethodChannel originatingChannel = channel;
+        worker.execute(() -> {
+            try {
+                Map<EncodeHintType, Object> hints = new HashMap<>();
+                hints.put(EncodeHintType.CHARACTER_SET, StandardCharsets.UTF_8.name());
+                hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
+                BitMatrix matrix = new MultiFormatWriter().encode(code,
+                        com.google.zxing.BarcodeFormat.QR_CODE, 400, 400, hints);
+                int width = matrix.getWidth();
+                int height = matrix.getHeight();
+                int[] pixels = new int[width * height];
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        pixels[y * width + x] = matrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+                    }
                 }
+                Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                byte[] png;
+                try {
+                    bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
+                    ByteArrayOutputStream output = new ByteArrayOutputStream();
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
+                    png = output.toByteArray();
+                } finally {
+                    bitmap.recycle();
+                }
+                mainHandler.post(() -> {
+                    if (channel == originatingChannel) result.success(png);
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (channel == originatingChannel) result.error("GENERATE_FAILED", e.getMessage(), null);
+                });
             }
-
-            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-            bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output);
-            result.success(output.toByteArray());
-        } catch (Exception e) {
-            result.error("GENERATE_FAILED", e.getMessage(), null);
-        }
+        });
     }
 
     @Override
@@ -222,7 +300,11 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
         IntentResult cameraResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
         if (cameraResult != null) {
             if (pendingResult != null) {
-                pendingResult.success(cameraResult.getContents());
+                if (data != null && data.getBooleanExtra(Intents.Scan.MISSING_CAMERA_PERMISSION, false)) {
+                    pendingResult.error("PERMISSION_DENIED", "Camera permission denied.", null);
+                } else {
+                    pendingResult.success(cameraResult.getContents());
+                }
                 pendingResult = null;
             }
             return true;
@@ -240,19 +322,28 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
             }
 
             Uri uri = data.getData();
-            try {
-                Bitmap bitmap = decodeUri(uri);
-                if (bitmap == null) {
-                    pendingResult.error("IMAGE_LOAD_FAILED", "Unable to load selected image.", null);
-                } else {
-                    pendingResult.success(decodeBitmap(bitmap));
+            final Context applicationContext = context;
+            final Result photoResult = pendingResult;
+            runInBackground(new Result() {
+                @Override
+                public void success(Object value) {
+                    if (pendingResult == photoResult) {
+                        pendingResult = null;
+                        photoResult.success(value);
+                    }
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Photo scan failed", e);
-                pendingResult.error("SCAN_FAILED", e.getMessage(), null);
-            } finally {
-                pendingResult = null;
-            }
+
+                @Override
+                public void error(String code, String message, Object details) {
+                    if (pendingResult == photoResult) {
+                        pendingResult = null;
+                        photoResult.error(code, message, details);
+                    }
+                }
+
+                @Override
+                public void notImplemented() { }
+            }, () -> scanBitmap(decodeUri(applicationContext, uri)));
             return true;
         }
 
@@ -274,15 +365,15 @@ public class QrscanPlugin implements FlutterPlugin, ActivityAware, MethodCallHan
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, sampledOptions(bounds));
     }
 
-    private Bitmap decodeUri(Uri uri) throws IOException {
+    private static Bitmap decodeUri(Context context, Uri uri) throws IOException {
         BitmapFactory.Options bounds = boundsOnlyOptions();
-        try (InputStream input = activity.getContentResolver().openInputStream(uri)) {
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
             if (input == null) {
                 return null;
             }
             BitmapFactory.decodeStream(input, null, bounds);
         }
-        try (InputStream input = activity.getContentResolver().openInputStream(uri)) {
+        try (InputStream input = context.getContentResolver().openInputStream(uri)) {
             if (input == null) {
                 return null;
             }

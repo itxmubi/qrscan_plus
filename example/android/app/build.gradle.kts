@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -38,6 +39,12 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // Older Flutter integration_test versions pull Espresso 3.2.0, whose
+    // duplicate namespaces fail manifest validation with AGP 9.
+    debugImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }
 
 flutter {

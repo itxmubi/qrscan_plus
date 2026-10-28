@@ -60,7 +60,17 @@
 | `scanBytes(bytes)` | ✅ | ✅ | Scan from raw byte data |
 | `generateBarCode(text)` | ✅ | ✅ | Generate a QR code image |
 
-> **Note:** `generateBarCode` returns PNG bytes on both platforms.
+> **Note:** `generateBarCode` returns PNG bytes on both platforms, with QR error correction level M.
+
+Live camera scanning on iOS supports QR, EAN-8, EAN-13 (including UPC-A), UPC-E,
+Code 39, Code 39 Mod 43, Code 93, Code 128, PDF417, Aztec, Data Matrix,
+Interleaved 2 of 5, and ITF-14, where available on the device. Android uses ZXing's
+supported formats. Camera and image decoding format availability can differ by
+platform; not every barcode format is supported on both.
+
+Android image decoding and QR generation run on a background worker. Image file
+paths may be absolute paths or `file://` URLs; `content://` URIs are not accepted
+by `scanPath()`. Use `scanPhoto()` for native gallery selection.
 
 ---
 
@@ -191,11 +201,14 @@ Common error codes:
 
 | Code | Meaning |
 |---|---|
-| `PERMISSION_DENIED` | Camera permission was denied (iOS) |
+| `PERMISSION_DENIED` | Camera permission was denied (Android or iOS); also available as `scanner.cameraAccessDenied` |
 | `BUSY` | A `scan()` or `scanPhoto()` call is already in progress |
-| `INVALID_ARGUMENT` / `INVALID_PATH` | Null or empty input passed to scanBytes / scanPath |
-| `INVALID_IMAGE` / `INVALID_IMAGE_BYTES` / `IMAGE_LOAD_FAILED` | The image could not be decoded |
-| `SCAN_FAILED` | Reading the selected image failed |
+| `INVALID_ARGUMENT` | Empty image path, empty image bytes, or empty QR generation input |
+| `INVALID_IMAGE` | The image could not be loaded or decoded |
+| `SCAN_FAILED` / `DETECTION_ERROR` | Barcode detection failed |
+| `GENERATE_FAILED` | Android QR generation failed |
+| `NO_ACTIVITY` / `UNAVAILABLE` / `SETUP_FAILED` | The scanner UI or camera could not be opened |
+| `ACTIVITY_DETACHED` / `ENGINE_DETACHED` | Android closed the activity or engine during a scan |
 
 ---
 
@@ -209,15 +222,10 @@ Common error codes:
 
 ## 🆚 Why qrscan_plus?
 
-| Feature | qrscan_plus | qr_code_scanner_plus | mobile_scanner |
-|---|---|---|---|
-| No JitPack required | ✅ | ❌ | ✅ |
-| `scanBytes()` support | ✅ | ❌ | ❌ |
-| `scanPath()` support | ✅ | ❌ | ❌ |
-| QR code generation | ✅ | ❌ | ❌ |
-| iOS 13+ support | ✅ | ✅ | ✅ |
-| Zero native iOS dependencies | ✅ | ❌ | ❌ |
-| Maven Central only (Android) | ✅ | ❌ | ✅ |
+- A small API for camera, gallery, file, and byte scanning, plus QR generation.
+- Android dependencies from Maven Central, with no JitPack setup.
+- Native AVFoundation and Vision on iOS, with no third-party iOS scanner dependency.
+- Supports CocoaPods and Swift Package Manager.
 
 ---
 
@@ -259,3 +267,35 @@ Contributions are welcome! Please open an issue first to discuss what you'd like
 MIT © [itxmubi](https://github.com/itxmubi)
 
 See [LICENSE](https://github.com/itxmubi/qrscan_plus/blob/master/LICENSE) for full details.
+
+## Development and testing
+
+```bash
+flutter pub get
+flutter analyze
+flutter test
+cd example
+flutter pub get
+flutter test
+flutter test integration_test/qrscan_integration_test.dart -d <device-id>
+```
+
+Native integration tests require an Android emulator/device or iOS simulator/device.
+They verify generated PNGs, Unicode payloads, byte and file decoding, and invalid
+images, no-code images, concurrent decoding, and EAN-13/Code 128 fixtures. CI runs Dart checks, Android
+integration tests, and an iOS simulator build with integration tests.
+The iOS simulator uses Vision revision 1 with CPU-only processing because newer
+revisions can fail to create an inference context or return no detections there.
+Physical devices use Vision's default revision; supported formats and detection
+accuracy can differ from simulator results.
+
+Camera permission denial, cancellation, rotation, and background/resume behavior
+should also be checked manually on physical devices before a release.
+
+The legacy `CameraAccessDenied` constant is deprecated in favor of
+`cameraAccessDenied`; its value now matches `PERMISSION_DENIED`. Invalid input
+returns a `PlatformException` with `INVALID_ARGUMENT` in debug and release builds.
+
+If your app matches legacy Android error codes, migrate `INVALID_PATH` and
+`INVALID_CODE` to `INVALID_ARGUMENT`, and `INVALID_IMAGE_BYTES` and
+`IMAGE_LOAD_FAILED` to `INVALID_IMAGE`.

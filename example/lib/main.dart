@@ -1,338 +1,172 @@
-import 'dart:async';
-import 'dart:developer';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/services.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qrscan_plus/qrscan_plus.dart' as scanner;
 
-void main() {
-  runApp(MyApp());
-}
+void main() => runApp(const MyApp());
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  Widget build(BuildContext context) => MaterialApp(
+    theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
+    home: const ScannerExample(),
+  );
 }
 
-class _MyAppState extends State<MyApp> {
-  Uint8List bytes = Uint8List(0);
-  TextEditingController? _inputController;
-  TextEditingController? _outputController;
+class ScannerExample extends StatefulWidget {
+  const ScannerExample({super.key});
 
   @override
-  initState() {
-    super.initState();
-    _inputController = TextEditingController();
-    _outputController = TextEditingController();
-  }
+  State<ScannerExample> createState() => _ScannerExampleState();
+}
+
+class _ScannerExampleState extends State<ScannerExample> {
+  final _inputController = TextEditingController();
+  Uint8List? _qrImage;
+  String _status = 'Choose a scan method or generate a QR code.';
+  bool _busy = false;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        backgroundColor: Colors.grey[300],
-        body: Builder(
-          builder: (BuildContext context) {
-            return ListView(
-              children: <Widget>[
-                _qrCodeWidget(bytes, context),
-                Container(
-                  color: Colors.white,
-                  child: Column(
-                    children: <Widget>[
-                      TextField(
-                        controller: _inputController,
-                        keyboardType: TextInputType.url,
-                        textInputAction: TextInputAction.go,
-                        onSubmitted: (value) => _generateBarCode(value),
-                        decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.text_fields),
-                          helperText:
-                              'Please input your code to generage qrcode image.',
-                          hintText: 'Please Input Your Code',
-                          hintStyle: TextStyle(fontSize: 15),
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 7, vertical: 15),
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      TextField(
-                        controller: _outputController,
-                        maxLines: 2,
-                        decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.wrap_text),
-                          helperText:
-                              'The barcode or qrcode you scan will be displayed in this area.',
-                          hintText:
-                              'The barcode or qrcode you scan will be displayed in this area.',
-                          hintStyle: TextStyle(fontSize: 15),
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 7, vertical: 15),
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      _buttonGroup(),
-                      SizedBox(height: 70),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => _scanBytes(),
-          tooltip: 'Take a Photo',
-          child: const Icon(Icons.camera_alt),
-        ),
-      ),
-    );
+  void dispose() {
+    _inputController.dispose();
+    super.dispose();
   }
 
-  Widget _qrCodeWidget(Uint8List bytes, BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.all(20),
-      child: Card(
-        elevation: 6,
-        child: Column(
-          children: <Widget>[
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-              decoration: BoxDecoration(
-                color: Colors.black12,
-                borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(4), topRight: Radius.circular(4)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  Icon(Icons.verified_user, size: 18, color: Colors.green),
-                  Text('  Generate Qrcode', style: TextStyle(fontSize: 15)),
-                  Spacer(),
-                  Icon(Icons.more_vert, size: 18, color: Colors.black54),
-                ],
-              ),
-            ),
-            Padding(
-              padding:
-                  EdgeInsets.only(left: 40, right: 40, top: 30, bottom: 10),
-              child: Column(
-                children: <Widget>[
-                  SizedBox(
-                    height: 190,
-                    child: bytes.isEmpty
-                        ? Center(
-                            child: Text('Empty code ... ',
-                                style: TextStyle(color: Colors.black38)),
-                          )
-                        : Image.memory(bytes),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.only(top: 7, left: 25, right: 25),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: <Widget>[
-                        Expanded(
-                          flex: 5,
-                          child: GestureDetector(
-                            child: Text(
-                              'remove',
-                              style:
-                                  TextStyle(fontSize: 15, color: Colors.blue),
-                              textAlign: TextAlign.left,
-                            ),
-                            onTap: () =>
-                                setState(() => this.bytes = Uint8List(0)),
-                          ),
-                        ),
-                        Text('|',
-                            style:
-                                TextStyle(fontSize: 15, color: Colors.black26)),
-                        Expanded(
-                          flex: 5,
-                          child: GestureDetector(
-                            onTap: () async {
-                              final messenger = ScaffoldMessenger.of(context);
-                              final success =
-                                  await ImageGallerySaverPlus.saveImage(
-                                      this.bytes);
-                              messenger.showSnackBar(SnackBar(
-                                  content: Text(success['isSuccess'] == true
-                                      ? 'Successful Preservation!'
-                                      : 'Save failed!')));
-                            },
-                            child: Text(
-                              'save',
-                              style:
-                                  TextStyle(fontSize: 15, color: Colors.blue),
-                              textAlign: TextAlign.right,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                ],
-              ),
-            ),
-            Divider(height: 2, color: Colors.black26),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-              child: Row(
-                children: <Widget>[
-                  Icon(Icons.history, size: 16, color: Colors.black38),
-                  Text('  Generate History',
-                      style: TextStyle(fontSize: 14, color: Colors.black38)),
-                  Spacer(),
-                  Icon(Icons.chevron_right, size: 16, color: Colors.black38),
-                ],
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buttonGroup() {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          flex: 1,
-          child: SizedBox(
-            height: 120,
-            child: InkWell(
-              onTap: () => _generateBarCode(_inputController!.text),
-              child: Card(
-                child: Column(
-                  children: <Widget>[
-                    Expanded(
-                      flex: 2,
-                      child: Image.asset('images/generate_qrcode.png'),
-                    ),
-                    Divider(height: 20),
-                    Expanded(flex: 1, child: Text("Generate")),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 1,
-          child: SizedBox(
-            height: 120,
-            child: InkWell(
-              onTap: _scan,
-              child: Card(
-                child: Column(
-                  children: <Widget>[
-                    Expanded(
-                      flex: 2,
-                      child: Image.asset('images/scanner.png'),
-                    ),
-                    Divider(height: 20),
-                    Expanded(flex: 1, child: Text("Scan")),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 1,
-          child: SizedBox(
-            height: 120,
-            child: InkWell(
-              onTap: _scanPhoto,
-              child: Card(
-                child: Column(
-                  children: <Widget>[
-                    Expanded(
-                      flex: 2,
-                      child: Image.asset('images/albums.png'),
-                    ),
-                    Divider(height: 20),
-                    Expanded(flex: 1, child: Text("Scan Photo")),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future _scan() async {
+  Future<void> _run(Future<String> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
     try {
-      final barcode = await scanner.scan();
-
-      log(barcode ?? 'Scan cancelled');
-      _outputController!.text = barcode ?? '';
-    } catch (e) {
-      log(e.toString());
-    }
-  }
-
-  Future<void> _scanPhoto() async {
-    try {
-      final barcode = await scanner.scanPhoto();
-      _outputController!.text = barcode != null && barcode.isNotEmpty
-          ? barcode
-          : 'No barcode/QR code found.';
-    } on PlatformException catch (e) {
-      log('scanPhoto platform error: ${e.code} ${e.message}');
-      _outputController!.text =
-          e.message ?? 'Failed to scan photo (${e.code}).';
-    } catch (e) {
-      log('scanPhoto error: $e');
-      _outputController!.text = 'Failed to scan photo.';
-    }
-  }
-
-  // Future _scanPath(String path) async {
-  //   String? barcode = await scanner.scanPath(path);
-  //   this._outputController!.text = barcode ?? '';
-  // }
-
-  Future _scanBytes() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
-    if (picked == null) return;
-    Uint8List bytes = await picked.readAsBytes();
-    String? barcode = await scanner.scanBytes(bytes);
-    _outputController!.text = barcode ?? 'No barcode/QR code found.';
-  }
-
-  Future<void> _generateBarCode(String inputCode) async {
-    final code = inputCode.trim();
-    if (code.isEmpty) {
-      _outputController!.text = 'Please enter text to generate a barcode.';
+      final status = await action();
+      if (mounted) setState(() => _status = status);
+    } on PlatformException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Input cannot be empty.')),
+        setState(
+          () => _status = error.code == scanner.cameraAccessDenied
+              ? 'Camera permission denied. Enable camera access in Settings.'
+              : '${error.code}: ${error.message ?? 'Operation failed.'}',
         );
       }
-      return;
-    }
-
-    try {
-      final result = await scanner.generateBarCode(code);
-      if (result != null) {
-        setState(() => bytes = result);
-      }
-    } on PlatformException catch (e) {
-      log('generateBarCode platform error: ${e.code} ${e.message}');
-      _outputController!.text =
-          e.message ?? 'Failed to generate barcode (${e.code}).';
-    } catch (e) {
-      log('generateBarCode error: $e');
-      _outputController!.text = 'Failed to generate barcode.';
+    } catch (error) {
+      if (mounted) setState(() => _status = 'Operation failed: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<String> _generate() async {
+    if (_inputController.text.trim().isEmpty) return 'Please enter some text.';
+    final image = await scanner.generateBarCode(_inputController.text);
+    if (image == null) return 'Could not generate a QR code.';
+    if (mounted) setState(() => _qrImage = image);
+    return 'QR code generated.';
+  }
+
+  Future<String> _scanImage({required bool useBytes}) async {
+    final image = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (image == null) return 'Image selection cancelled.';
+    final result = useBytes
+        ? await scanner.scanBytes(await image.readAsBytes())
+        : await scanner.scanPath(image.path);
+    return result ?? 'No barcode or QR code found in this image.';
+  }
+
+  Future<String> _save() async {
+    final image = _qrImage;
+    if (image == null) return 'Generate a QR code first.';
+    final result = await ImageGallerySaverPlus.saveImage(image);
+    return result['isSuccess'] == true
+        ? 'Image saved.'
+        : 'Could not save image.';
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('qrscan_plus example')),
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          TextField(
+            controller: _inputController,
+            enabled: !_busy,
+            decoration: const InputDecoration(
+              labelText: 'Text or URL',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => _run(_generate),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _busy ? null : () => _run(_generate),
+            icon: const Icon(Icons.qr_code),
+            label: const Text('Generate QR code'),
+          ),
+          if (_qrImage != null) ...[
+            const SizedBox(height: 16),
+            Image.memory(
+              _qrImage!,
+              height: 220,
+              filterQuality: FilterQuality.none,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: _busy ? null : () => _run(_save),
+                  child: const Text('Save image'),
+                ),
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() => _qrImage = null),
+                  child: const Text('Clear image'),
+                ),
+              ],
+            ),
+          ],
+          const Divider(height: 32),
+          FilledButton.icon(
+            onPressed: _busy
+                ? null
+                : () => _run(
+                    () async =>
+                        await scanner.scan() ??
+                        'Scanner closed without a result.',
+                  ),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan with camera'),
+          ),
+          OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => _run(
+                    () async =>
+                        await scanner.scanPhoto() ??
+                        'No result: selection cancelled or no code found.',
+                  ),
+            child: const Text('Scan photo with native picker'),
+          ),
+          OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => _run(() => _scanImage(useBytes: false)),
+            child: const Text('Scan image by file path'),
+          ),
+          OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => _run(() => _scanImage(useBytes: true)),
+            child: const Text('Scan image by bytes'),
+          ),
+          const SizedBox(height: 20),
+          if (_busy) const LinearProgressIndicator(),
+          const SizedBox(height: 16),
+          Semantics(liveRegion: true, child: SelectableText(_status)),
+        ],
+      ),
+    ),
+  );
 }

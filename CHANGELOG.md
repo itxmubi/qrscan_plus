@@ -1,3 +1,16 @@
+## Unreleased
+**Error-code compatibility changes:** Android `INVALID_PATH` and `INVALID_CODE` become `INVALID_ARGUMENT`; `INVALID_IMAGE_BYTES` and `IMAGE_LOAD_FAILED` become `INVALID_IMAGE`. Update handlers that match these strings.
+
+- Enable supported 1D and 2D barcode formats in the iOS camera scanner.
+- Move Android photo/file/byte decoding and QR generation off the main thread, recycle temporary bitmaps, and allow non-UI methods without an attached activity.
+- Normalize Android and iOS invalid input/image errors; add release-mode Dart validation and a `cameraAccessDenied` constant. Deprecate `CameraAccessDenied` and update its value to `PERMISSION_DENIED`.
+- Report Android camera permission denial separately from cancellation; align QR generation at error correction level M.
+- Support `file://` image paths on Android as well as iOS.
+- Update the example with loading states, controller disposal, error handling, and all scan methods.
+- Replace obsolete Travis CI with GitHub Actions and add native round-trip and barcode-fixture integration tests.
+- Repair the example's missing Kotlin plugin and debug-only Espresso dependency for AGP 9 integration-test compatibility.
+- Use Vision revision 1 with CPU-only processing on iOS simulators so image decoding works there; physical devices retain the default Vision revision.
+
 ## [2.0.0]
 **Breaking changes**
 - `scan()`, `scanPhoto()`, `scanPath()` and `scanBytes()` now return `Future<String?>`, and `generateBarCode()` returns `Future<Uint8List?>`. `null` means the scan was cancelled or no code was found. Previously a cancelled scan threw a `TypeError`.

@@ -21,6 +21,8 @@ dependencies:
     path: ../
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
@@ -38,6 +40,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+   - integration_test/fixtures/
    - images/generate_qrcode.png
    - images/scanner.png
    - images/albums.png
